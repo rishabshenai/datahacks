@@ -48,10 +48,14 @@ latest: dict = {
     "distance_mm":   100.0,
     "turbulence":      0.0,
     "is_anomaly":    False,
+    "turb_spike":    False,
+    "simulated":      True,
+    "scientific_insight": "Awaiting data stabilization...",
     "gemini_summary":   "",
     "audio_url":        "",
 }
 _lock = threading.Lock()
+_readings_buffer = []
 
 # ── MONTHLY BASELINES (CalCOFI 75-yr surface records) ────────────────────────
 BASELINES: dict[int, dict] = {
@@ -129,6 +133,7 @@ def generate_voice(text: str) -> str:
 # ── SERIAL THREAD ────────────────────────────────────────────────────────────
 def serial_loop():
     global latest
+    _last_turb = 0.0
     port = os.getenv("ARDUINO_PORT", "/dev/ttyACM0")
     try:
         ser = serial.Serial(port, 9600, timeout=2)
@@ -145,13 +150,21 @@ def serial_loop():
                 turbulence = float(d["turbulence"])
 
                 is_anom, temp_z, dist_z, turb_z = check_anomaly(temp, dist_mm, turbulence)
+                turb_spike = (turbulence - _last_turb) > 0.2
+                _last_turb = turbulence
 
                 with _lock:
+                    _readings_buffer.append({"temp": temp, "dist_mm": dist_mm, "turbulence": turbulence})
+                    if len(_readings_buffer) > 10:
+                        _readings_buffer.pop(0)
+
                     latest.update({
                         "temp":        temp,
                         "distance_mm": dist_mm,
                         "turbulence":  turbulence,
                         "is_anomaly":  is_anom,
+                        "turb_spike":  turb_spike,
+                        "simulated":   False,
                     })
 
                 # FIX §6.1: S3 payload uses only available Modulino fields
@@ -196,18 +209,27 @@ def _simulate():
     """Fallback simulation when Arduino is not connected."""
     import random
     print("▶ Simulation mode active (no serial port)")
+    _last_turb = 0.0
     while True:
         temp  = round(14.2 + random.gauss(0, 2.5), 1)
         dist  = round(100  + random.gauss(0, 20),  1)
         turb  = round(abs(random.gauss(0, 0.4)),   3)
         is_a, tz, dz, tbz = check_anomaly(temp, dist, turb)
+        turb_spike = (turb - _last_turb) > 0.2
+        _last_turb = turb
 
         with _lock:
+            _readings_buffer.append({"temp": temp, "dist_mm": dist, "turbulence": turb})
+            if len(_readings_buffer) > 10:
+                _readings_buffer.pop(0)
+
             latest.update({
                 "temp":        temp,
                 "distance_mm": dist,
                 "turbulence":  turb,
                 "is_anomaly":  is_a,
+                "turb_spike":  turb_spike,
+                "simulated":   True,
             })
 
         if is_a:
@@ -222,8 +244,26 @@ def _simulate():
         time.sleep(3)
 
 
-threading.Thread(target=serial_loop, daemon=True).start()
+def insight_loop():
+    while True:
+        time.sleep(30)
+        with _lock:
+            buf = list(_readings_buffer)
+        if not buf:
+            continue
+        
+        prompt = f"Analyze these consecutive ocean sensor readings (Temp °C, Distance mm, Turbulence m/s²): {buf}\nProvide a single, one-sentence highly professional oceanographic insight about the current state. No jargon, just the insight."
+        try:
+            res = gemini.generate_content(prompt).text.strip()
+            with _lock:
+                latest["scientific_insight"] = res
+        except Exception as e:
+            print(f"Gemini insight error: {e}")
+            with _lock:
+                latest["scientific_insight"] = "Awaiting data stabilization..."
 
+threading.Thread(target=serial_loop, daemon=True).start()
+threading.Thread(target=insight_loop, daemon=True).start()
 
 # ── ROUTES ───────────────────────────────────────────────────────────────────
 @app.route("/live")
