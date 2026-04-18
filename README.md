@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <p align="center">
   <h1 align="center">🌊 AEGIS OCEAN</h1>
   <p align="center"><strong>The Democratic Ocean Sentinel</strong></p>
@@ -220,3 +221,6 @@ No API keys are required for the visual demo. If `GEMINI_KEY` is set, Gemini ins
 <p align="center">
   <em>Making invisible climate crises visceral and actionable.</em>
 </p>
+=======
+# 404 Fish Not Found
+>>>>>>> origin/main

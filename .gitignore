@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Secrets — NEVER commit
 .env
 *.env
@@ -29,3 +30,9 @@ docs/build/
 
 # Jupyter / Marimo
 .ipynb_checkpoints/
+=======
+.env
+__pycache__
+*.pyc
+data/calcofi/
+>>>>>>> origin/main
