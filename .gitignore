@@ -1,5 +1,4 @@
-<<<<<<< HEAD
-# Secrets — NEVER commit
+# Secrets
 .env
 *.env
 
@@ -19,20 +18,13 @@ build/
 *.pt
 *.h5
 *.onnx
-splats.json          # large file — upload to S3, not git
 readings.db
+data/calcofi/
+splats.json
 
 # macOS
 .DS_Store
 
-# Sphinx build output (commit only if judges need it)
+# Sphinx / notebooks
 docs/build/
-
-# Jupyter / Marimo
 .ipynb_checkpoints/
-=======
-.env
-__pycache__
-*.pyc
-data/calcofi/
->>>>>>> origin/main
