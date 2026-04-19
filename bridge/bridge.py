@@ -36,11 +36,12 @@ CORS(
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get("Origin")
-    allowed = {"http://127.0.0.1:8000", "http://localhost:8000"}
+    allowed = {"http://127.0.0.1:8000", "http://localhost:8000",
+               "http://127.0.0.1:8080", "http://localhost:8080"}
     if origin in allowed:
         response.headers["Access-Control-Allow-Origin"] = origin
     else:
-        response.headers["Access-Control-Allow-Origin"] = "http://127.0.0.1:8000"
+        response.headers["Access-Control-Allow-Origin"] = "http://127.0.0.1:8080"
     response.headers["Vary"] = "Origin"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
@@ -879,6 +880,25 @@ def zones_historical():
                     entry = calcofi_monthly_cache.get((zone_key, year, alt_month))
                     if entry and entry["temp_mean"] is not None:
                         break
+            else:
+                entry = None
+
+        if not entry or entry["temp_mean"] is None:
+            # Fall back to nearest preceding year with data
+            available_years = sorted(set(y for (zk, y, m) in calcofi_monthly_cache if zk == zone_key), reverse=True)
+            for alt_year in available_years:
+                if alt_year > year:
+                    continue
+                entry = calcofi_monthly_cache.get((zone_key, alt_year, month))
+                if not entry or entry["temp_mean"] is None:
+                    for delta in [1, -1, 2, -2]:
+                        alt_month = month + delta
+                        if 1 <= alt_month <= 12:
+                            entry = calcofi_monthly_cache.get((zone_key, alt_year, alt_month))
+                            if entry and entry["temp_mean"] is not None:
+                                break
+                if entry and entry["temp_mean"] is not None:
+                    break
             else:
                 entry = None
 

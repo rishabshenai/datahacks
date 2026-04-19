@@ -627,6 +627,11 @@
 			text-align: right;
 		}
 
+		.signal-val.critical {
+			color: #ff6b6b;
+			animation: critical-pulse 1.4s ease-in-out infinite;
+		}
+
 		.live-pill {
 			display: inline-flex;
 			align-items: center;
@@ -1038,6 +1043,18 @@
 			background: rgba(141, 153, 174, 0.18);
 			color: #c4d2e4;
 			border-color: rgba(141, 153, 174, 0.28);
+		}
+
+		.feed-badge.critical {
+			background: rgba(220, 38, 38, 0.22);
+			color: #ffc0c0;
+			border-color: rgba(220, 38, 38, 0.5);
+			animation: critical-pulse 1.4s ease-in-out infinite;
+		}
+
+		@keyframes critical-pulse {
+			0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.0); }
+			50% { box-shadow: 0 0 8px 3px rgba(220, 38, 38, 0.4); }
 		}
 
 		/* ── Sentinel Terminal CSS ── */
@@ -2177,9 +2194,24 @@
 			document.getElementById('sig-sal').textContent = `${fmt(live?.salinity, 2)} PSU`;
 			document.getElementById('sig-oxy').textContent = `${fmt(live?.dissolved_oxygen, 2)} mL/L`;
 			document.getElementById('sig-score').textContent = fmt(live?.anomaly_score, 3);
-			document.getElementById('sig-alert').textContent = live?.anomaly_label || 'Nominal';
+
+			const sigAlert = document.getElementById('sig-alert');
+			const y = DashboardState.targetYear, m = DashboardState.targetMonth;
+			const inBlobPeriod = !DashboardState.isLive
+				&& (y > 2014 || (y === 2014 && m >= 4))
+				&& (y < 2016 || (y === 2016 && m <= 4));
+			if (inBlobPeriod) {
+				sigAlert.textContent = 'CRITICAL';
+				sigAlert.className = 'signal-val critical';
+			} else {
+				sigAlert.textContent = live?.anomaly_label || 'Nominal';
+				sigAlert.className = 'signal-val';
+			}
+
 			document.getElementById('signal-summary').textContent =
-				DashboardState.alert?.narrative
+				inBlobPeriod
+				? 'The Pacific Blob: sustained marine heatwave, mass die-offs, kelp collapse.'
+				: DashboardState.alert?.narrative
 				|| (summary
 					? `Proxy model: heat lowers kelp health; hypoxia and freshening suppress projected urchin pressure.`
 					: 'Historical replay driving real-time risk scoring.');
@@ -2449,13 +2481,29 @@
 			const badge = document.getElementById('feed-badge');
 			const feedTime = document.getElementById('feed-time');
 			const feedMode = document.getElementById('feed-mode');
+			const subcopy = document.getElementById('feed-subcopy');
+
+			// April 2014 – April 2016: Blob anomaly period
+			const afterStart = year > 2014 || (year === 2014 && month >= 4);
+			const beforeEnd  = year < 2016 || (year === 2016 && month <= 4);
+			const isCriticalPeriod = afterStart && beforeEnd;
 
 			if (badge) {
-				badge.className = 'feed-badge archive';
-				badge.textContent = 'ARCHIVE';
+				if (isCriticalPeriod) {
+					badge.className = 'feed-badge critical';
+					badge.textContent = 'CRITICAL';
+				} else {
+					badge.className = 'feed-badge archive';
+					badge.textContent = 'ARCHIVE';
+				}
+			}
+			if (subcopy) {
+				subcopy.textContent = isCriticalPeriod
+					? 'The Pacific Blob — anomalous marine heatwave (2–3°C above baseline) devastated kelp forests and triggered mass strandings along the California coast.'
+					: 'Historical CalCOFI observation record.';
 			}
 			if (feedTime) feedTime.textContent = `${TM_MONTH_NAMES[month - 1]} ${year}`;
-			if (feedMode) feedMode.textContent = 'Historical CalCOFI View';
+			if (feedMode) feedMode.textContent = isCriticalPeriod ? 'CRITICAL EVENT — The Blob 2014–2016' : 'Historical CalCOFI View';
 		}
 
 		// ── Slider input handler ──
