@@ -678,6 +678,54 @@
 			box-shadow: 0 10px 20px rgba(77, 168, 218, 0.16);
 		}
 
+		#splat-legend {
+			display: none;
+			position: absolute;
+			bottom: 56px;
+			right: 18px;
+			width: 160px;
+			background: rgba(8, 17, 29, 0.72);
+			border: 1px solid var(--panel-border);
+			border-radius: 10px;
+			padding: 10px 13px 9px;
+			backdrop-filter: blur(10px);
+			pointer-events: none;
+			z-index: 20;
+		}
+
+		#view-3d-underwater.active #splat-legend {
+			display: block;
+		}
+
+		#legend-title {
+			font-size: 10px;
+			font-weight: 700;
+			color: var(--text-primary);
+			text-transform: uppercase;
+			letter-spacing: 0.07em;
+			margin-bottom: 7px;
+		}
+
+		.legend-gradient {
+			height: 10px;
+			border-radius: 4px;
+			margin-bottom: 4px;
+		}
+
+		.legend-labels {
+			display: flex;
+			justify-content: space-between;
+			font-size: 9px;
+			color: var(--text-muted);
+			margin-bottom: 6px;
+		}
+
+		#legend-desc {
+			font-size: 9px;
+			color: var(--text-muted);
+			line-height: 1.4;
+		}
+
 		#annotations {
 			position: absolute;
 			inset: 0;
@@ -791,6 +839,54 @@
 			transition: opacity 0.2s ease, transform 0.2s ease;
 		}
 
+		#notebook-btn {
+			background: rgba(8, 17, 29, 0.52);
+			border: 1px solid var(--panel-border);
+			color: var(--text-muted);
+			padding: 8px 16px;
+			border-radius: 20px;
+			font-size: 11px;
+			font-weight: 600;
+			cursor: pointer;
+			backdrop-filter: blur(8px);
+			text-decoration: none;
+			white-space: nowrap;
+			transition: all 0.2s;
+		}
+
+		#notebook-btn:hover {
+			color: var(--text-primary);
+			border-color: var(--primary);
+		}
+
+		#manual-alert-btn {
+			background: rgba(180, 30, 30, 0.18);
+			border: 1px solid rgba(255, 90, 95, 0.5);
+			color: #ff5a5f;
+			padding: 8px 16px;
+			border-radius: 20px;
+			font-size: 11px;
+			font-weight: 700;
+			letter-spacing: 0.06em;
+			cursor: pointer;
+			backdrop-filter: blur(8px);
+			transition: all 0.2s;
+			text-transform: uppercase;
+			white-space: nowrap;
+		}
+
+		#manual-alert-btn:hover {
+			background: rgba(255, 90, 95, 0.28);
+			border-color: #ff5a5f;
+			box-shadow: 0 0 12px rgba(255, 90, 95, 0.3);
+		}
+
+		#manual-alert-btn.firing {
+			background: rgba(255, 90, 95, 0.4);
+			color: #fff;
+			pointer-events: none;
+		}
+
 		#view-2d-map .maplibregl-canvas,
 		#view-2d-map .maplibregl-canvas-container,
 		#view-2d-map .maplibregl-map {
@@ -821,6 +917,15 @@
 		<div id="dive-overlay"></div>
 		<div id="view-3d-underwater">
 			<div id="annotations"></div>
+			<div id="splat-legend">
+				<div id="legend-title"></div>
+				<div class="legend-gradient" id="legend-gradient"></div>
+				<div class="legend-labels">
+					<span id="legend-low"></span>
+					<span id="legend-high"></span>
+				</div>
+				<div id="legend-desc"></div>
+			</div>
 		</div>
 	</div>
 
@@ -836,6 +941,11 @@
 				<div class="view-pill active" id="pill-2d" onclick="switchView('2d')">2D Map</div>
 				<div class="view-pill" id="pill-3d" onclick="switchView('3d')">3D Underwater</div>
 			</div>
+
+			<div style="display:flex;gap:8px;align-items:center;">
+			<a id="notebook-btn" href="https://molab.marimo.io/notebooks/nb_BgudyGmB1o5tsau3UHPBSt/app" target="_blank" rel="noopener">Data Notebook</a>
+			<button id="manual-alert-btn" onclick="triggerManualAlert()">⚠ Trigger Alert</button>
+		</div>
 
 		</div>
 
@@ -1217,6 +1327,34 @@
 				.catch(error => console.error('Map load failed', error));
 		}
 
+		window.triggerManualAlert = async function triggerManualAlert() {
+			const btn = document.getElementById('manual-alert-btn');
+			btn.classList.add('firing');
+			btn.textContent = '⚠ Sending…';
+			try {
+				const res = await fetch(`${API_BASE}/alert/trigger`, { method: 'POST' });
+				const data = await res.json();
+				if (data.ok) {
+					DashboardState.alert = data.alert;
+					updateSignalsPanel();
+					updateFeedPanel();
+					btn.textContent = '⚠ Alert Sent';
+					setTimeout(() => {
+						btn.textContent = '⚠ Trigger Alert';
+						btn.classList.remove('firing');
+					}, 3000);
+				} else {
+					throw new Error(data.error || 'Unknown error');
+				}
+			} catch (err) {
+				btn.textContent = '⚠ Failed';
+				setTimeout(() => {
+					btn.textContent = '⚠ Trigger Alert';
+					btn.classList.remove('firing');
+				}, 2000);
+			}
+		};
+
 		window.switchView = function switchView(mode) {
 			if (DashboardState.viewMode === mode || DashboardState.isTransitioning) return;
 			DashboardState.isTransitioning = true;
@@ -1232,6 +1370,7 @@
 			mapView.classList.toggle('hidden', mode === '3d');
 			underwater.classList.toggle('active', mode === '3d');
 			controls.style.display = mode === '3d' ? 'flex' : 'none';
+			if (mode === '3d') updateLegend(DashboardState.currentMode);
 
 			const desktop = document.getElementById('status-desktop');
 			const desktopText = document.getElementById('status-desktop-text');
@@ -1617,12 +1756,29 @@
 
 		animate();
 
+		const LEGEND_CONFIG = {
+			heat:     { title: 'Heat / Anomaly',       gradient: 'linear-gradient(to right, #0d2e8c, #1f7ac7, #e07820, #fa3d1f)', low: 'Baseline', high: 'Critical anomaly', desc: 'Color maps the ML anomaly score — how far each water parcel deviates from 75-yr CalCOFI norms.' },
+			kelp:     { title: 'Projected Kelp Health', gradient: 'linear-gradient(to right, #1aa36b, #f46e26)',                    low: 'Healthy',   high: 'Heat-stressed',   desc: 'Green = thriving kelp canopy. Orange = heat or hypoxia stress driving die-off risk.' },
+			urchin:   { title: 'Urchin Density',        gradient: 'linear-gradient(to right, #2d2870, #bd33fa)',                    low: 'Low',       high: 'High pressure',   desc: 'Purple → magenta shows rising urchin barren pressure where kelp is declining.' },
+			salinity: { title: 'Salinity',              gradient: 'linear-gradient(to right, #0d4dd1, #d9ae1f)',                    low: 'Freshwater', high: 'High salinity',  desc: 'Blue = freshwater influx (runoff/rain). Yellow = saltier than seasonal baseline.' },
+		};
+
+		function updateLegend(mode) {
+			const cfg = LEGEND_CONFIG[mode] || LEGEND_CONFIG.heat;
+			document.getElementById('legend-title').textContent = cfg.title;
+			document.getElementById('legend-gradient').style.background = cfg.gradient;
+			document.getElementById('legend-low').textContent = cfg.low;
+			document.getElementById('legend-high').textContent = cfg.high;
+			document.getElementById('legend-desc').textContent = cfg.desc;
+		}
+
 		function setModeVisual(mode) {
 			DashboardState.currentMode = mode;
 			const modeIndex = { heat: 0, kelp: 1, urchin: 2, salinity: 3 }[mode] || 0;
 			if (oceanUniforms) {
 				oceanUniforms.uMode.value = modeIndex;
 			}
+			updateLegend(mode);
 		}
 
 		window.setMode = function setMode(button, mode) {

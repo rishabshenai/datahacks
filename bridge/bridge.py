@@ -41,7 +41,7 @@ def add_cors_headers(response):
         response.headers["Access-Control-Allow-Origin"] = "http://127.0.0.1:8000"
     response.headers["Vary"] = "Origin"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return response
 
 
@@ -54,6 +54,8 @@ def env(name: str, default=None):
 
 
 GEMINI_KEY = env("GEMINI_KEY")
+ELEVENLABS_KEY = env("ELEVENLABS_KEY")
+ELEVENLABS_VOICE_ID = env("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
 AWS_REGION = env("AWS_REGION", "us-west-2")
 DATA_BUCKET = env("S3_DATA_BUCKET", "aegis-ocean-data")
 ALERTS_BUCKET = env("S3_ALERTS_BUCKET", "aegis-ocean-alerts")
@@ -62,6 +64,8 @@ DB_PATH = ROOT / "readings.db"
 
 gemini = genai.Client(api_key=GEMINI_KEY) if GEMINI_KEY else None
 s3 = boto3.client("s3", region_name=AWS_REGION)
+
+_last_spoken_narrative: str = ""
 
 S3_KEYS = {
     "baselines": "baselines.json",
@@ -511,8 +515,49 @@ Threat: which kelp threat this pattern matches
 Urgency: LOW, MEDIUM, HIGH, or CRITICAL
 Action: what the biologist should investigate and where to dispatch urchin hunters
 """
-    response = gemini.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+    response = gemini.models.generate_content(model="models/gemini-2.5-flash", contents=prompt)
     return (response.text or "").strip()
+
+
+def speak_alert(narrative: str) -> None:
+    global _last_spoken_narrative
+    if not ELEVENLABS_KEY or narrative == _last_spoken_narrative:
+        return
+    _last_spoken_narrative = narrative
+    try:
+        import urllib.request
+        spoken_text = narrative.split("Action:")[0].strip()
+        payload = json.dumps({
+            "text": spoken_text,
+            "model_id": "eleven_monolingual_v1",
+            "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+        }).encode()
+        req = urllib.request.Request(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}",
+            data=payload,
+            headers={
+                "xi-api-key": ELEVENLABS_KEY,
+                "Content-Type": "application/json",
+                "Accept": "audio/mpeg",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            audio_bytes = resp.read()
+
+        import subprocess, shutil
+        audio_path = ROOT / "alert.mp3"
+        audio_path.write_bytes(audio_bytes)
+
+        for player in ("afplay", "mpg123", "ffplay"):
+            if shutil.which(player):
+                subprocess.Popen(
+                    [player] + ([] if player != "ffplay" else ["-nodisp", "-autoexit"]) + [str(audio_path)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                break
+    except Exception as exc:
+        print(f"[TTS] voice alert failed: {exc}")
 
 
 def store_alert(row, narrative, urgency, threat, zone_name=None):
@@ -603,6 +648,7 @@ def process_row(row, zone_name=None):
             "zone_key": state["zone_key"],
         }
         store_alert(row, narrative, urgency, threat, zone_name)
+        threading.Thread(target=speak_alert, args=(narrative,), daemon=True).start()
     return state
 
 
@@ -724,6 +770,52 @@ def zones_live():
 def alert_latest():
     with state_lock:
         return jsonify(dict(latest_alert))
+
+
+@app.route("/alert/trigger", methods=["POST", "OPTIONS"])
+def alert_trigger():
+    if request.method == "OPTIONS":
+        return "", 204
+    with state_lock:
+        zone_states = dict(latest_zones)
+
+    # Pick the most anomalous zone available
+    candidates = [s for s in zone_states.values() if s and s.get("temp_c") is not None]
+    if not candidates:
+        return jsonify({"ok": False, "error": "No zone data available yet"}), 503
+
+    candidates.sort(key=lambda s: float(s.get("anomaly_score", 0)))
+    state = candidates[0]
+
+    row = pd.Series({
+        "timestamp": state["timestamp"],
+        "temp_c": state["temp_c"],
+        "salinity": state["salinity"],
+        "dissolved_oxygen": state["dissolved_oxygen"],
+        "station_lat": state["station_lat"],
+        "station_lon": state["station_lon"],
+    })
+    baseline = zone_baselines_by_name.get(state["zone_key"], {}).get(
+        pd.Timestamp(state["timestamp"]).month, {}
+    )
+    narrative = generate_alert_narrative(row, baseline, state.get("z_scores", {}), state["zone_key"])
+    urgency, threat = parse_alert_fields(narrative)
+
+    alert = {
+        "active": True,
+        "timestamp": state["timestamp"],
+        "location": {"lat": state["station_lat"], "lon": state["station_lon"]},
+        "narrative": narrative,
+        "urgency": urgency,
+        "threat": threat,
+        "zone": state["zone"],
+        "zone_key": state["zone_key"],
+    }
+    with state_lock:
+        latest_alert.update(alert)
+
+    threading.Thread(target=speak_alert, args=(narrative,), daemon=True).start()
+    return jsonify({"ok": True, "alert": alert})
 
 
 @app.route("/health")
