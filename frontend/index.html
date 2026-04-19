@@ -1039,6 +1039,65 @@
 			color: #c4d2e4;
 			border-color: rgba(141, 153, 174, 0.28);
 		}
+
+		/* ── Sentinel Terminal CSS ── */
+		#sentinel-terminal {
+			position: fixed;
+			bottom: 80px;
+			right: 24px;
+			width: 380px;
+			max-height: 0;
+			opacity: 0;
+			overflow: hidden;
+			background: rgba(16, 24, 38, 0.85);
+			backdrop-filter: blur(8px);
+			-webkit-backdrop-filter: blur(8px);
+			border: 1px solid rgba(77, 168, 218, 0.3);
+			border-radius: 8px;
+			z-index: 20;
+			transition: max-height 0.4s ease, opacity 0.4s ease, padding 0.4s ease;
+			font-family: 'Courier New', Courier, monospace;
+			font-size: 11px;
+			color: var(--indicator-nominal);
+			box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+			display: flex;
+			flex-direction: column;
+		}
+
+		#sentinel-terminal.active {
+			max-height: 400px;
+			opacity: 1;
+			padding: 14px;
+		}
+
+		#sentinel-terminal-log {
+			flex: 1;
+			overflow-y: auto;
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+		}
+
+		.terminal-line {
+			opacity: 0;
+			animation: terminal-fade-in 0.2s forwards;
+			line-height: 1.4;
+		}
+		.terminal-line.success {
+			color: var(--indicator-safe);
+			font-weight: bold;
+		}
+		.terminal-line.incoming {
+			color: var(--primary);
+			margin-top: 8px;
+			border-left: 2px solid var(--primary);
+			padding-left: 6px;
+		}
+
+		@keyframes terminal-fade-in {
+			from { opacity: 0; transform: translateY(4px); }
+			to { opacity: 1; transform: translateY(0); }
+		}
 	</style>
 </head>
 
@@ -1165,6 +1224,11 @@
 				</div>
 			</div>
 		</div>
+	</div>
+
+	<!-- Sentinel Terminal -->
+	<div id="sentinel-terminal">
+		<div id="sentinel-terminal-log"></div>
 	</div>
 
 	<!-- Historical Time Machine Slider -->
@@ -1475,31 +1539,67 @@
 				.catch(error => console.error('Map load failed', error));
 		}
 
+		let _dispatchAbortController = null;
+		
+		const SIMULATED_RESPONSES = {
+			'del-mar': '[INCOMING] Scripps_Coastal_Tech: "Anomaly confirmed. Monitoring Z-score drift. Standing by for glider deployment."',
+			'point-loma': '[INCOMING] SD_District_2: "Report received. Notifying local fisheries of hypoxia risk."',
+			'south-bay': '[INCOMING] Imperial_Beach_Mayor: "Alert acknowledged. Coordinating with South Bay Water Quality."'
+		};
+
 		window.triggerManualAlert = async function triggerManualAlert() {
-			const btn = document.getElementById('manual-alert-btn');
-			btn.classList.add('firing');
-			btn.textContent = '⚠ Sending…';
+			if (_dispatchAbortController) {
+				_dispatchAbortController.abort();
+			}
+			_dispatchAbortController = new AbortController();
+
+			const term = document.getElementById('sentinel-terminal');
+			const logContainer = document.getElementById('sentinel-terminal-log');
+			
+			// Reset and show terminal
+			logContainer.innerHTML = '';
+			term.classList.add('active');
+
+			function logLine(text, className = '') {
+				return new Promise(resolve => {
+					const el = document.createElement('div');
+					el.className = `terminal-line ${className}`;
+					el.textContent = text;
+					logContainer.appendChild(el);
+					logContainer.scrollTop = logContainer.scrollHeight;
+					setTimeout(resolve, 800); // 800ms reading delay for sequential effect
+				});
+			}
+
 			try {
-				const res = await fetch(`${API_BASE}/alert/trigger`, { method: 'POST' });
+				await logLine(`> INITIALIZING SECURE LINK...`);
+				await logLine(`> GEMINI ANALYZING ANOMALY PROFILE...`);
+
+				const res = await fetch(`${API_BASE}/alert/dispatch`, { 
+					method: 'POST',
+					signal: _dispatchAbortController.signal 
+				});
 				const data = await res.json();
-				if (data.ok) {
-					DashboardState.alert = data.alert;
-					updateSignalsPanel();
-					updateFeedPanel();
-					btn.textContent = '⚠ Alert Sent';
-					setTimeout(() => {
-						btn.textContent = '⚠ Trigger Alert';
-						btn.classList.remove('firing');
-					}, 3000);
-				} else {
-					throw new Error(data.error || 'Unknown error');
+				
+				if (!data.ok) throw new Error(data.error);
+
+				await logLine(`> SECURE LINK TO [${data.zone.toUpperCase()}] ESTABLISHED.`);
+				if (data.pdf_path) {
+					await logLine(`> PDF SNAPSHOT GENERATED.`);
 				}
-			} catch (err) {
-				btn.textContent = '⚠ Failed';
+				await logLine(`> DISPATCHING TO [${data.agencies.join(', ')}]...`);
+				await logLine(`> [DISPATCH SUCCESSFUL - AWAITING RECEIPT]`, 'success');
+
+				// 20 sec delay simulated response
 				setTimeout(() => {
-					btn.textContent = '⚠ Trigger Alert';
-					btn.classList.remove('firing');
-				}, 2000);
+					const responseMsg = SIMULATED_RESPONSES[data.zone_key] || '[INCOMING] Authority: "Message received."';
+					logLine(responseMsg, 'incoming');
+				}, 20000);
+
+			} catch (err) {
+				if (err.name === 'AbortError') return;
+				await logLine(`> ERROR: DISPATCH FAILED - ${err.message}`, 'incoming');
+				setTimeout(() => term.classList.remove('active'), 5000);
 			}
 		};
 

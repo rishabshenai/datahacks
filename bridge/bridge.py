@@ -18,6 +18,7 @@ import time
 import joblib
 import numpy as np
 import pandas as pd
+from fpdf import FPDF
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -111,6 +112,12 @@ latest_alert = {
     "threat": "",
     "zone": None,
     "zone_key": None,
+}
+
+AGENCY_MAP = {
+    "del-mar": ["Del Mar City Council", "Scripps Coastal Team"],
+    "point-loma": ["SD District 2 Office", "SIO Marine Lab"],
+    "south-bay": ["Imperial Beach Mayor", "South Bay Water Quality"]
 }
 status = {
     "last_error": "",
@@ -990,6 +997,67 @@ def alert_trigger():
 
     threading.Thread(target=speak_alert, args=(narrative,), daemon=True).start()
     return jsonify({"ok": True, "alert": alert})
+
+
+@app.route("/alert/dispatch", methods=["POST", "OPTIONS"])
+def alert_dispatch():
+    if request.method == "OPTIONS":
+        return "", 204
+    with state_lock:
+        zone_states = dict(latest_zones)
+
+    candidates = [s for s in zone_states.values() if s and s.get("temp_c") is not None]
+    if not candidates:
+        return jsonify({"ok": False, "error": "No zone data available"}), 503
+
+    candidates.sort(key=lambda s: float(s.get("anomaly_score", 0)))
+    state = candidates[0]
+    zone_key = state["zone_key"]
+    
+    agencies = AGENCY_MAP.get(zone_key, ["General Environmental Agency"])
+
+    # Generate PDF Snapshot
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt=f"Sentinel Hard-Data Report: {state['zone'].upper()}", ln=1, align="C")
+    pdf.cell(200, 10, txt=f"Timestamp: {state['timestamp']}", ln=1)
+    pdf.cell(200, 10, txt=f"Lat/Lon: {state['station_lat']}, {state['station_lon']}", ln=1)
+    pdf.cell(200, 10, txt=f"Temperature: {state['temp_c']} C", ln=1)
+    pdf.cell(200, 10, txt=f"Salinity: {state.get('salinity')} PSU", ln=1)
+    pdf.cell(200, 10, txt=f"Dissolved Oxygen: {state.get('dissolved_oxygen')} mL/L", ln=1)
+    pdf.cell(200, 10, txt=f"Overall Anomaly Score: {state.get('anomaly_score')}", ln=1)
+    
+    z_scores = state.get('z_scores', {})
+    pdf.cell(200, 10, txt=f"Z-Scores - Temp: {z_scores.get('temp')}, Sal: {z_scores.get('salinity')}, DO: {z_scores.get('oxygen')}", ln=1)
+    
+    pdf_path = f"/tmp/sentinel_report_{zone_key}_{int(time.time())}.pdf"
+    try:
+        pdf.output(pdf_path)
+    except Exception as e:
+        print(f"Error generating PDF: {e}")
+        pdf_path = None
+
+    summary = "System error: unable to generate summary."
+    if gemini:
+        prompt = f"""You are an Aegis Ocean AI Sentinel. Summarize these Z-scores and metrics for a non-technical official.
+Focus on kelp die-off risk and immediate environmental threats. Keep it urgent but professional.
+[LIVE_DATA]: Zone: {state['zone']}, Temp: {state['temp_c']}C, Salinity: {state.get('salinity')}, DO: {state.get('dissolved_oxygen')}.
+Z-scores: {z_scores}"""
+        try:
+            resp = gemini.models.generate_content(model="models/gemini-2.5-flash", contents=prompt)
+            summary = resp.text
+        except Exception as e:
+            print(f"Gemini error: {e}")
+
+    return jsonify({
+        "ok": True,
+        "summary": summary,
+        "zone": state["zone"],
+        "zone_key": zone_key,
+        "agencies": agencies,
+        "pdf_path": pdf_path
+    })
 
 
 @app.route("/health")
