@@ -9,6 +9,12 @@ from google import genai
 import json
 import os
 import time
+import sqlite3
+import threading
+import pandas as pd
+import pickle
+import datetime
+import io
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,6 +63,144 @@ state = {
     "last_error": "",
     "last_loaded_at": 0.0,
 }
+
+# --- DIGITAL TWIN SENTINEL INTEGRATION ---
+current_reading = {
+    "timestamp": None,
+    "temp": 0.0,
+    "salinity": 0.0,
+    "dissolved_oxygen": 0.0,
+    "is_anomaly": False,
+    "anomaly_score": 0.0,
+    "scientific_insight": "Awaiting data stabilization...",
+    "simulated": True,
+    "distance_mm": 100.0,
+    "turbulence": 0.0,
+    "turb_spike": False
+}
+_reading_lock = threading.Lock()
+
+# Setup SQLite DB
+conn = sqlite3.connect("readings.db", check_same_thread=False)
+conn.execute('''CREATE TABLE IF NOT EXISTS readings
+             (timestamp TEXT, temp_c REAL, salinity REAL, dissolved_oxygen REAL, 
+              is_anomaly BOOLEAN, z_temp REAL, z_sal REAL, z_do REAL)''')
+conn.commit()
+
+class MooringReplay:
+    def __init__(self, s3_client, bucket, baselines):
+        self.s3 = s3_client
+        self.bucket = bucket
+        self.baselines = baselines
+        self.df = None
+        self.model = None
+        self.index = 0
+        self._load_data()
+
+    def _load_data(self):
+        try:
+            print("Downloading Mooring Replay data from S3...")
+            csv_obj = self.s3.get_object(Bucket=self.bucket, Key="mooring_replay.csv")
+            self.df = pd.read_csv(io.BytesIO(csv_obj["Body"].read()))
+            self.df["timestamp"] = pd.to_datetime(self.df["timestamp"])
+            self.df = self.df.sort_values(by="timestamp").reset_index(drop=True)
+
+            print("Downloading Isolation Forest model from S3...")
+            pkl_obj = self.s3.get_object(Bucket=self.bucket, Key="isolation_forest.pkl")
+            self.model = pickle.loads(pkl_obj["Body"].read())
+            print("Digital Twin assets loaded successfully.")
+        except Exception as e:
+            print(f"Failed to load Digital Twin assets from S3: {e}")
+            # Mock fallback if unable to fetch
+            self.df = pd.DataFrame([{"timestamp": datetime.datetime.now(), "temp_c": 15.0, "salinity": 33.5, "dissolved_oxygen": 5.0}])
+            from sklearn.ensemble import IsolationForest
+            self.model = IsolationForest().fit([[0.0, 0.0, 0.0]])
+            
+    def run(self):
+        while True:
+            if self.df is None or self.df.empty:
+                time.sleep(2)
+                continue
+                
+            if self.index >= len(self.df):
+                self.index = 0
+            
+            row = self.df.iloc[self.index]
+            dt = row["timestamp"]
+            t_c = float(row.get("temp_c", 15.0))
+            sal = float(row.get("salinity", 33.5))
+            do = float(row.get("dissolved_oxygen", 5.0))
+            month = str(dt.month)
+            
+            b_list = self.baselines if isinstance(self.baselines, list) else []
+            if isinstance(self.baselines, dict):
+                b = self.baselines.get(month, self.baselines.get("1", {}))
+            else:
+                b = next((x for x in b_list if str(x.get("month")) == month), b_list[0] if b_list else {})
+
+            t_mean = b.get("temp_mean", 13.0)
+            t_std = b.get("temp_std", 1.0)
+            s_mean = b.get("salinity_mean", 33.0)
+            s_std = b.get("salinity_std", 1.0)
+            do_mean = b.get("do_mean", 5.0)
+            do_std = b.get("do_std", 1.0)
+
+            z_temp = (t_c - t_mean) / (t_std if t_std else 1.0)
+            z_sal = (sal - s_mean) / (s_std if s_std else 1.0)
+            z_do = (do - do_mean) / (do_std if do_std else 1.0)
+            
+            score = float(self.model.decision_function([[z_temp, z_sal, z_do]])[0])
+            is_anomaly = score < -0.1
+            
+            insight_text = current_reading["scientific_insight"]
+            if is_anomaly:
+                dt_c = t_c - t_mean
+                ds = sal - s_mean
+                dd = do - do_mean
+                prompt = (f"System Instruction: You are a Senior Marine Ecologist at Scripps Institution of Oceanography. "
+                          f"You specialize in kelp forest resilience and urchin barren prevention.\n"
+                          f"Input Context: The current temperature is {z_temp:.2f}σ above the monthly mean. "
+                          f"The thermal spike has penetrated to the 35m holdfast layer.\n"
+                          f"Requirement: Ensure the response always includes three sections: \n"
+                          f"1. Scientific Diagnosis\n2. Ecosystem Risk (Low-Critical)\n3. Actionable Dispatch Coordinates.")
+                try:
+                    if gemini:
+                        res = gemini.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+                        insight_text = res.text
+                    else:
+                        insight_text = "Critical anomaly detected locally (Gemini disabled)."
+                except Exception as e:
+                    insight_text = f"Anomaly ping failed: {e}"
+            else:
+                insight_text = "Tracking standard CalCOFI variables..."
+
+            with _reading_lock:
+                current_reading.update({
+                    "timestamp": dt.isoformat(),
+                    "temp": t_c,
+                    "salinity": sal,
+                    "dissolved_oxygen": do,
+                    "z_temp": z_temp,
+                    "z_sal": z_sal,
+                    "z_do": z_do,
+                    "is_anomaly": is_anomaly,
+                    "anomaly_score": score,
+                    "scientific_insight": insight_text,
+                    "simulated": True,
+                    "distance_mm": 100.0,
+                    "turbulence": 0.0,
+                    "turb_spike": False
+                })
+
+            def _insert():
+                conn.execute("INSERT INTO readings VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                             (dt.isoformat(), t_c, sal, do, is_anomaly, z_temp, z_sal, z_do))
+                conn.commit()
+            threading.Thread(target=_insert, daemon=True).start()
+
+            self.index += 1
+            time.sleep(2)
+# --- END DIGITAL TWIN ---
 
 
 def fallback_dataset(name):
@@ -223,5 +367,14 @@ def insight():
     )
 
 
+@app.route("/live")
+def live():
+    with _reading_lock:
+        return jsonify(dict(current_reading))
+
+
 if __name__ == "__main__":
-    app.run(port=5000, debug=False)
+    records, _ = load_dataset("baselines")
+    replay = MooringReplay(s3, DATA_BUCKET, records)
+    threading.Thread(target=replay.run, daemon=True).start()
+    app.run(port=5005, debug=False)

@@ -216,11 +216,27 @@ No API keys are required for the visual demo. If `GEMINI_KEY` is set, Gemini ins
 
 **404 Fish Now Found** — DS3 @ UCSD, DataHacks 2026
 
----
-
 <p align="center">
   <em>Making invisible climate crises visceral and actionable.</em>
 </p>
-=======
-# 404 Fish Not Found
->>>>>>> origin/main
+
+---
+
+## Technical Analytics & Documentation
+
+### Notebooks & Exports (Marimo/Databricks)
+We harness local analytics to bridge raw SQLite metrics with data visualization using the **Marimo** reactive notebook framework alongside **Databricks**. Check the `/notebooks` folder for the Python scripts representing these pipelines.
+To export dynamic HTML summaries directly into `/docs` for offline presentation, execute:
+```bash
+marimo export html notebooks/analytics.py > docs/analytics.html
+```
+
+### Scientific Methodology
+* **Z-Score Normalization**: To identify significant anomalies in real-time sensor streams without arbitrary hardcoding, we explicitly apply $Z$-Score scaling using $Z = \frac{X - \mu}{\sigma}$ relative to monthly Scripps historical means.
+* **Isolation Forest**: CalCOFI baseline metrics map into an Isolation Forest model (trained via PySpark on Databricks architecture). Because kelp degradation is typically a multivariate crisis involving both temperature elevation and oxygen depletion simultaneously, the Isolation Forest dynamically cuts dimensional planes identifying distinct profile irregularities ($score < -0.1$), triggering Gemini when ecosystems breach tolerance.
+
+## Dataset Citations
+We explicitly acknowledge the Scripps Institution of Oceanography for their rigorous historical modeling underpinning this project's predictive capabilities:
+1. **CalCOFI (California Cooperative Oceanic Fisheries Investigations):** Providing the 75-year multi-feature regional baselines.
+2. **CCE LTER (California Current Ecosystem):** Point sensor metrics used directly inside our temporal replay mechanisms.
+3. **EasyOneArgo:** Point cloud generation data fueling our high-fidelity WebGL Gaussian Splat spatial projections.

@@ -122,6 +122,14 @@
 </head>
 
 <body>
+	<div id="offline-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,10,26,0.8); z-index:9999; justify-content:center; align-items:center; color:#00ffcc; font-size:24px; font-family:-apple-system, BlinkMacSystemFont, monospace; font-weight:bold; backdrop-filter:blur(8px);">
+		Connecting to Sentinel...
+	</div>
+	<div id="kelp-alert-banner" style="display:none; position:fixed; bottom:40px; left:50%; transform:translateX(-50%); width:600px; max-width:90%; background:rgba(30,0,0,0.85); border:2px solid #ff4444; border-radius:12px; padding:20px; z-index:1000; box-shadow:0 0 30px rgba(255,0,0,0.5); text-align:center; backdrop-filter:blur(10px);">
+		<div style="color:#ff4444; font-size:18px; font-weight:bold; letter-spacing:2px; margin-bottom:10px;">KELP SHIELD ALERT</div>
+		<div id="kelp-alert-text" style="color:#ffd0d0; font-size:14px; line-height:1.5; font-family:-apple-system, BlinkMacSystemFont, sans-serif;"></div>
+	</div>
+	<div id="kelp-label" style="position: absolute; color: #2ecc71; font-family: monospace; font-size: 12px; font-weight: bold; pointer-events: none; text-shadow: 0 0 5px #000, 0 0 10px #000; z-index: 100; transform: translate(-50%, -50%); display: none;">Critical Kelp Holdfast Zone (-35m)</div>
 	<div id='ui'>
 		<div class='panel'>
 			<div style='color:#00ffcc; font-weight:bold; margin-bottom:8px;'>AEGIS OCEAN SENTINEL</div>
@@ -148,7 +156,15 @@
 			</div>
 			<div class='sensor-row'>
 				<div class='sensor-label'>Temperature</div>
-				<div class='sensor-value'><span id='lv-temp'>--</span><span class='sensor-unit'>°C</span></div>
+				<div class='sensor-value' id='badge-temp'><span id='lv-temp'>--</span><span class='sensor-unit'>°C</span></div>
+			</div>
+			<div class='sensor-row'>
+				<div class='sensor-label'>Salinity</div>
+				<div class='sensor-value' id='badge-sal'><span id='lv-sal'>--</span><span class='sensor-unit'> PSU</span></div>
+			</div>
+			<div class='sensor-row'>
+				<div class='sensor-label'>Dissolved O₂</div>
+				<div class='sensor-value' id='badge-do'><span id='lv-do'>--</span><span class='sensor-unit'> mg/L</span></div>
 			</div>
 			<div class='sensor-row'>
 				<div class='sensor-label'>Distance</div>
@@ -192,7 +208,7 @@
 		document.body.appendChild(renderer.domElement);
 
 		// ── ORBIT CONTROLS (inline) ───────────────────────────
-		let drag = false, prev = { x: 0, y: 0 }, theta = 0.4, phi = Math.PI / 2.5, radius = 3.5;
+		let drag = false, prev = { x: 0, y: 0 }, theta = 0.4, phi = Math.PI / 2.5, targetPhi = Math.PI / 2.5, radius = 3.5;
 		renderer.domElement.addEventListener('mousedown', e => { drag = true; prev = { x: e.clientX, y: e.clientY }; });
 		renderer.domElement.addEventListener('mouseup', () => drag = false);
 		renderer.domElement.addEventListener('mousemove', e => {
@@ -200,6 +216,7 @@
 			theta -= (e.clientX - prev.x) * 0.005;
 			phi -= (e.clientY - prev.y) * 0.005;
 			phi = Math.max(0.1, Math.min(Math.PI - 0.1, phi));
+			targetPhi = phi; // user override
 			prev = { x: e.clientX, y: e.clientY };
 		});
 		renderer.domElement.addEventListener('wheel', e => {
@@ -214,6 +231,7 @@
   uniform float uTurbulence;
   varying float vAnomaly;
   varying float vWeight;
+  varying float vDepth;
 
   // cheap hash for per-vertex pseudo-random
   float hash(float n) { return fract(sin(n) * 43758.5453123); }
@@ -221,6 +239,7 @@
   void main() {
 	vAnomaly = anomaly;
 	vWeight  = aScale;
+	vDepth   = position.y;
 
 	// turbulence jitter: displaces each vertex by a unique oscillating offset
 	float id  = position.x * 73.1 + position.y * 127.3 + position.z * 311.7;
@@ -239,6 +258,7 @@
 		const fragShader = `
   varying float vAnomaly;
   varying float vWeight;
+  varying float vDepth;
   uniform float uTime;
   uniform float uAlert;
   uniform float uTemperature;  // normalised: 0 = cold (10°C), 1 = hot (25°C)
@@ -264,9 +284,20 @@
 	vec2 uv = gl_PointCoord - 0.5;
 	if (dot(uv, uv) > 0.25) discard;
 	vec3 col = heatmap(vAnomaly, uTemperature);
+	
+	// Bio-Hazard Penetration Highlight
+	bool inHotzone = abs(vDepth - (-0.35)) < 0.08 && vAnomaly > 0.2 && uAlert > 0.5;
+	
 	float pulse = uAlert > 0.5 && abs(vAnomaly) > 0.3
 	  ? abs(sin(uTime * 4.0)) * uAlert : 0.0;
-	col = mix(col, vec3(1.0, 0.15, 0.0), pulse);
+	  
+	if (inHotzone) {
+	    col = vec3(1.0, 0.28, 0.34); // #ff4757 (Bio-Hazard Red)
+	    pulse = abs(sin(uTime * 8.0)) * uAlert * 1.5;
+	} else {
+	    col = mix(col, vec3(1.0, 0.15, 0.0), pulse);
+	}
+	
 	float a = mix(0.04, 0.12, vWeight) + pulse * 0.15;
 	gl_FragColor = vec4(col, a);
   }
@@ -363,7 +394,7 @@
 		liveDot.position.set(-0.1, 0, 0.15);  // approx San Diego on scene
 		scene.add(liveDot);
 
-		// ── GRID FLOOR ────────────────────────────────────────
+		// ── GRID FLOOR & DEPTH LAYER ──────────────────────────
 		const floor = new THREE.Mesh(
 			new THREE.PlaneGeometry(2, 1.5, 48, 48),
 			new THREE.MeshBasicMaterial({
@@ -375,15 +406,42 @@
 		floor.position.y = -1.05;
 		scene.add(floor);
 
+		const depthPlane = new THREE.Mesh(
+			new THREE.PlaneGeometry(3, 3, 10, 10),
+			new THREE.MeshBasicMaterial({ color: 0x2ecc71, transparent: true, opacity: 0.2, wireframe: true, side: THREE.DoubleSide })
+		);
+		depthPlane.rotation.x = -Math.PI / 2;
+		depthPlane.position.y = -0.35; // Simulated Kelp holdfast depth normalized
+		scene.add(depthPlane);
+
 		// ── RENDER LOOP ───────────────────────────────────────
 		const clock = new THREE.Clock();
+		const kelpLabel = document.getElementById('kelp-label');
+		const planeCenter = new THREE.Vector3(0, -0.35, 0);
+
 		renderer.setAnimationLoop(() => {
 			const t = clock.getElapsedTime();
+			
+			// LERP Camera Phi for "Money Shot" Mode
+			phi += (targetPhi - phi) * 0.02;
+
 			camera.position.x = radius * Math.sin(phi) * Math.sin(theta);
 			camera.position.y = radius * Math.cos(phi);
 			camera.position.z = radius * Math.sin(phi) * Math.cos(theta);
 			camera.lookAt(sceneTarget);
 			liveDot.scale.setScalar(1 + 0.3 * Math.sin(t * 3));
+			
+			// 2D Projection for Kelp Label
+			const proj = planeCenter.clone().project(camera);
+			if (proj.z < 1) { // in front of camera
+			    const x = (proj.x * 0.5 + 0.5) * innerWidth;
+			    const y = (proj.y * -0.5 + 0.5) * innerHeight;
+			    kelpLabel.style.display = 'block';
+			    kelpLabel.style.left = x + 'px';
+			    kelpLabel.style.top = y + 'px';
+			} else {
+			    kelpLabel.style.display = 'none';
+			}
 			
 			if (bgPulse > 0) {
 				bgPulse = Math.max(0, bgPulse - 0.015);
@@ -447,30 +505,49 @@
 			type();
 		}
 
-		async function pollLive() {
-			try {
-				const d = await fetch('http://localhost:5000/live').then(r => r.json());
-				
-				lastRaw.temp = d.temp;
-				lastRaw.dist = d.distance_mm;
-				lastRaw.turb = d.turbulence;
+		function getColorForSigma(z) {
+			const absZ = Math.abs(z);
+			if (absZ < 1) return '#00ff00';
+			if (absZ < 2) return '#ffcc00';
+			return '#ff4444';
+		}
 
-				// Push live sensor values into shader uniforms
-				if (splatMesh) {
-					// uTurbulence: raw m/s² clamped to 0-2 range for jitter intensity
-					splatMesh.material.uniforms.uTurbulence.value = Math.min(d.turbulence, 2.0);
-					// uTemperature: normalise 10°C→0, 25°C→1 for heatmap palette shift
-					splatMesh.material.uniforms.uTemperature.value = Math.max(0, Math.min(1, (d.temp - 10) / 15));
+		class AegisDataManager {
+			constructor() {
+				this.offlineOverlay = document.getElementById('offline-overlay');
+				setInterval(() => this.fetchData(), 2000);
+				this.fetchData();
+			}
+			async fetchData() {
+				try {
+					const res = await fetch('http://localhost:5005/live');
+					if (!res.ok) throw new Error("Offline");
+					const d = await res.json();
+					this.offlineOverlay.style.display = 'none';
+					this.updateState(d);
+				} catch(e) {
+					this.offlineOverlay.style.display = 'flex';
 				}
+			}
+			updateState(d) {
+				lastRaw.temp = d.temp || 0;
+				lastRaw.dist = d.distance_mm || 0;
+				lastRaw.turb = d.turbulence || 0;
 
-				const displayTemp = (d.temp - offsetTemp).toFixed(1);
-				const displayDist = (d.distance_mm - offsetDist).toFixed(0);
-				const displayTurb = (Math.max(0, d.turbulence - offsetTurb)).toFixed(2);
+				const badgeTemp = document.getElementById('badge-temp');
+				const badgeSal = document.getElementById('badge-sal');
+				const badgeDo = document.getElementById('badge-do');
 
-				document.getElementById('lv-temp').textContent = displayTemp;
-				document.getElementById('lv-dist').textContent = displayDist;
-				document.getElementById('lv-turb').textContent = displayTurb;
-				
+				if (badgeTemp) badgeTemp.style.color = getColorForSigma(d.z_temp || 0);
+				if (badgeSal) badgeSal.style.color = getColorForSigma(d.z_sal || 0);
+				if (badgeDo) badgeDo.style.color = getColorForSigma(d.z_do || 0);
+
+				document.getElementById('lv-temp').textContent = Math.max(0, (lastRaw.temp - offsetTemp)).toFixed(1);
+				document.getElementById('lv-sal').textContent = (d.salinity || 0).toFixed(1);
+				document.getElementById('lv-do').textContent = (d.dissolved_oxygen || 0).toFixed(1);
+				document.getElementById('lv-dist').textContent = (lastRaw.dist - offsetDist).toFixed(0);
+				document.getElementById('lv-turb').textContent = (Math.max(0, lastRaw.turb - offsetTurb)).toFixed(2);
+
 				const badge = document.getElementById('sim-badge');
 				if (d.simulated) {
 					badge.style.display = 'inline-block';
@@ -483,31 +560,51 @@
 				}
 
 				const statusEl = document.getElementById('lv-status');
+				const alertBanner = document.getElementById('kelp-alert-banner');
+				
 				if (d.is_anomaly) {
 					alertPulse = 1.0;
+					targetPhi = Math.PI / 2; // SIDE PROFILE: Sinks to view Kelp Level
 					statusEl.textContent = 'ANOMALY'; statusEl.style.color = '#ff4444';
-					document.getElementById('alert-text').textContent =
-						d.gemini_summary || 'Anomaly detected.';
+					alertBanner.style.display = 'block';
+					
+					if (d.scientific_insight && d.scientific_insight !== currentInsight) {
+					    currentInsight = d.scientific_insight;
+					    document.getElementById('kelp-alert-text').innerHTML = currentInsight + "<br><br><span style='color:#ff4757;'>Thermal Spike detected at 35m—Direct Kelp Mortality Risk High.</span>";
+						document.getElementById('alert-text').textContent = "Kelp Threat Narrative Active.";
+					}
+					
 					if (d.audio_url) {
 						const a = document.getElementById('alert-audio');
-						a.src = d.audio_url; a.style.display = 'block'; a.play();
+						if (a.src !== d.audio_url) {
+						    a.src = d.audio_url; a.style.display = 'block'; a.play();
+						}
 					}
 				} else {
 					alertPulse = 0.0;
+					targetPhi = Math.PI / 2.5; // RESTORE
 					statusEl.textContent = 'NOMINAL'; statusEl.style.color = '#00ff00';
+					alertBanner.style.display = 'none';
+					document.getElementById('alert-text').textContent = "Monitoring California Current...";
+					
+					if (d.scientific_insight && d.scientific_insight !== currentInsight) {
+					    currentInsight = d.scientific_insight;
+					    typeWriterEffect('insight-text', currentInsight);
+					}
 				}
 
-				if (d.scientific_insight && d.scientific_insight !== currentInsight) {
-					currentInsight = d.scientific_insight;
-					typeWriterEffect('insight-text', currentInsight);
+				if (splatMesh) {
+					splatMesh.material.uniforms.uTurbulence.value = Math.min(lastRaw.turb, 2.0);
+					splatMesh.material.uniforms.uTemperature.value = Math.max(0, Math.min(1, (lastRaw.temp - 10) / 15));
 				}
-			} catch (e) { }
+			}
 		}
-		setInterval(pollLive, 3000);
+		
+		const aegisData = new AegisDataManager();
 
 		async function pollX() {
 			try {
-				const posts = await fetch('http://localhost:5000/x-feed').then(r => r.json());
+				const posts = await fetch('http://localhost:5005/x-feed').then(r => r.json());
 				document.getElementById('x-posts').innerHTML = posts.slice(0, 5)
 					.map(p => `<div style='border-bottom:1px solid #333;padding:3px 0;color:#ccc;'>
            	${p.text.substring(0, 90)}...</div>`).join('');
