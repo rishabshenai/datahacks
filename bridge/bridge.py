@@ -16,6 +16,7 @@ import threading
 import time
 
 import joblib
+import numpy as np
 import pandas as pd
 
 
@@ -132,6 +133,18 @@ zone_baselines_by_name: dict[str, dict[int, dict]] = {}
 zone_replays_by_name: dict[str, pd.DataFrame] = {}
 zone_models: dict[str, object] = {}
 latest_zones: dict[str, dict] = {}
+
+# Historical Time Machine: CalCOFI monthly aggregates keyed by (zone_key, year, month)
+calcofi_monthly_cache: dict[tuple, dict] = {}
+calcofi_year_range: tuple[int, int] = (1949, 2026)
+
+# Zone coordinates used to assign CalCOFI rows to the nearest zone
+ZONE_COORDS = {
+    "del-mar":    (32.96, -117.27),
+    "point-loma": (32.67, -117.24),
+    "south-bay":  (32.58, -117.17),
+}
+CALCOFI_ZONE_RADIUS_DEG = 0.35  # ~39 km radius for zone assignment
 
 
 class MockIsolationForest:
@@ -408,6 +421,77 @@ def load_resources():
 
     status["zone_count"] = len(zone_replays_by_name)
     status["zone_mode_active"] = zone_mode_available()
+
+    # Build CalCOFI monthly cache for the Historical Time Machine
+    build_calcofi_cache()
+
+
+def build_calcofi_cache():
+    """Pre-aggregate calcofi_relevant.csv into per-zone monthly averages keyed by (zone, year, month)."""
+    global calcofi_monthly_cache, calcofi_year_range
+    csv_path = ROOT / "data" / "calcofi_relevant.csv"
+    if not csv_path.exists():
+        print("[TimeMachine] calcofi_relevant.csv not found – historical endpoint will return 404.")
+        return
+
+    print("[TimeMachine] Loading CalCOFI CSV and building monthly cache...")
+    try:
+        df = pd.read_csv(csv_path, parse_dates=["timestamp"])
+    except Exception as exc:
+        print(f"[TimeMachine] Failed to read CalCOFI CSV: {exc}")
+        return
+
+    # Assign each row to the nearest zone (within CALCOFI_ZONE_RADIUS_DEG)
+    zone_assignments = []
+    lat_arr = df["station_lat"].values
+    lon_arr = df["station_lon"].values
+    for idx in range(len(df)):
+        lat, lon = lat_arr[idx], lon_arr[idx]
+        best_zone = None
+        best_dist = CALCOFI_ZONE_RADIUS_DEG
+        for zone_key, (zlat, zlon) in ZONE_COORDS.items():
+            dist = np.sqrt((lat - zlat) ** 2 + (lon - zlon) ** 2)
+            if dist < best_dist:
+                best_dist = dist
+                best_zone = zone_key
+        zone_assignments.append(best_zone)
+
+    df["zone_key"] = zone_assignments
+    df = df.dropna(subset=["zone_key"])
+
+    if df.empty:
+        print("[TimeMachine] No CalCOFI rows matched any zone – cache empty.")
+        return
+
+    df["year"] = df["timestamp"].dt.year
+    # Use the 'month' column if it already exists, otherwise derive it
+    if "month" not in df.columns:
+        df["month"] = df["timestamp"].dt.month
+    else:
+        df["month"] = df["month"].astype(int)
+
+    agg_cols = {"temp_c": ["mean", "std", "count"], "salinity": ["mean", "std"], "dissolved_oxygen": ["mean", "std"]}
+    grouped = df.groupby(["zone_key", "year", "month"]).agg(agg_cols)
+
+    cache = {}
+    for (zone_key, year, month), row in grouped.iterrows():
+        cache[(zone_key, int(year), int(month))] = {
+            "temp_mean": float(row[("temp_c", "mean")]) if pd.notna(row[("temp_c", "mean")]) else None,
+            "temp_std": float(row[("temp_c", "std")]) if pd.notna(row[("temp_c", "std")]) else 1.0,
+            "temp_count": int(row[("temp_c", "count")]),
+            "sal_mean": float(row[("salinity", "mean")]) if pd.notna(row[("salinity", "mean")]) else None,
+            "sal_std": float(row[("salinity", "std")]) if pd.notna(row[("salinity", "std")]) else 0.3,
+            "oxygen_mean": float(row[("dissolved_oxygen", "mean")]) if pd.notna(row[("dissolved_oxygen", "mean")]) else None,
+            "oxygen_std": float(row[("dissolved_oxygen", "std")]) if pd.notna(row[("dissolved_oxygen", "std")]) else 0.7,
+        }
+
+    calcofi_monthly_cache = cache
+
+    years = sorted(set(y for _, y, _ in cache.keys()))
+    if years:
+        calcofi_year_range = (years[0], years[-1])
+
+    print(f"[TimeMachine] Cache built: {len(cache)} entries, years {calcofi_year_range[0]}–{calcofi_year_range[1]}")
 
 
 def zscore(value, mean, std):
@@ -764,6 +848,96 @@ def baseline():
 def zones_live():
     with state_lock:
         return jsonify(dict(latest_zones))
+
+
+@app.route("/zones/historical")
+def zones_historical():
+    """Return per-zone state for a given historical year/month using CalCOFI monthly cache."""
+    year = request.args.get("year", type=int)
+    month = request.args.get("month", type=int)
+    if not year or not month or month < 1 or month > 12:
+        return jsonify({"error": "year and month (1-12) are required"}), 400
+
+    if not calcofi_monthly_cache:
+        return jsonify({"error": "Historical CalCOFI cache not available"}), 503
+
+    result = {}
+    for zone_key, (zlat, zlon) in ZONE_COORDS.items():
+        entry = calcofi_monthly_cache.get((zone_key, year, month))
+        if not entry or entry["temp_mean"] is None:
+            # Try adjacent months within the same year
+            for delta in [1, -1, 2, -2]:
+                alt_month = month + delta
+                if 1 <= alt_month <= 12:
+                    entry = calcofi_monthly_cache.get((zone_key, year, alt_month))
+                    if entry and entry["temp_mean"] is not None:
+                        break
+            else:
+                entry = None
+
+        if not entry or entry["temp_mean"] is None:
+            # Provide a null-safe fallback
+            result[zone_key] = {
+                "zone_key": zone_key,
+                "zone": zone_key.replace("-", " ").title(),
+                "timestamp": f"{year}-{month:02d}-15T12:00:00",
+                "temp_c": None,
+                "salinity": None,
+                "dissolved_oxygen": None,
+                "station_lat": zlat,
+                "station_lon": zlon,
+                "anomaly_score": 0.0,
+                "anomaly_label": "NO DATA",
+                "is_anomaly": False,
+                "z_scores": {"temp": 0.0, "salinity": 0.0, "oxygen": 0.0},
+                "source": "calcofi-historical",
+                "historical_month": {"year": year, "month": month},
+            }
+            continue
+
+        # Compute z-scores against the 75-year baseline for this zone/month
+        baseline = current_zone_baseline_for(zone_key, f"{year}-{month:02d}-15")
+        temp_val = entry["temp_mean"]
+        sal_val = entry["sal_mean"] if entry["sal_mean"] is not None else baseline["sal_mean"]
+        oxy_val = entry["oxygen_mean"] if entry["oxygen_mean"] is not None else baseline["oxygen_mean"]
+
+        z_scores = {
+            "temp": zscore(temp_val, baseline["temp_mean"], baseline["temp_std"]),
+            "salinity": zscore(sal_val, baseline["sal_mean"], baseline["sal_std"]),
+            "oxygen": zscore(oxy_val, baseline["oxygen_mean"], baseline["oxygen_std"]),
+        }
+
+        active_model = zone_models.get(zone_key, model)
+        features = [[z_scores["temp"], z_scores["salinity"], z_scores["oxygen"]]]
+        score = float(active_model.decision_function(features)[0]) if active_model else 0.0
+        label = label_from_score(score)
+        is_anomaly = score < -0.05
+
+        result[zone_key] = {
+            "zone_key": zone_key,
+            "zone": zone_key.replace("-", " ").title(),
+            "timestamp": f"{year}-{month:02d}-15T12:00:00",
+            "temp_c": round(temp_val, 2),
+            "salinity": round(sal_val, 3),
+            "dissolved_oxygen": round(oxy_val, 3) if oxy_val else None,
+            "station_lat": zlat,
+            "station_lon": zlon,
+            "anomaly_score": round(score, 4),
+            "anomaly_label": label,
+            "is_anomaly": is_anomaly,
+            "z_scores": {k: round(v, 3) for k, v in z_scores.items()},
+            "source": "calcofi-historical",
+            "historical_month": {"year": year, "month": month},
+            "calcofi_count": entry["temp_count"],
+        }
+
+    return jsonify(result)
+
+
+@app.route("/zones/historical/range")
+def zones_historical_range():
+    """Return the min/max year range available in the CalCOFI cache."""
+    return jsonify({"minYear": calcofi_year_range[0], "maxYear": calcofi_year_range[1]})
 
 
 @app.route("/alert/latest")

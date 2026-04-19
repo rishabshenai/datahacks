@@ -907,6 +907,138 @@
 				width: 250px;
 			}
 		}
+
+		/* ── Historical Time Machine Slider ── */
+		#time-machine-bar {
+			position: fixed;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			z-index: 15;
+			pointer-events: auto;
+			padding: 10px 24px 14px;
+			background: rgba(10, 16, 28, 0.62);
+			backdrop-filter: blur(18px) saturate(170%);
+			-webkit-backdrop-filter: blur(18px) saturate(170%);
+			border-top: 1px solid rgba(125, 170, 205, 0.10);
+			transition: opacity 0.3s ease, transform 0.3s ease;
+		}
+
+		#time-machine-inner {
+			display: flex;
+			align-items: center;
+			gap: 14px;
+			max-width: 900px;
+			margin: 0 auto;
+		}
+
+		#tm-label {
+			font-size: 11px;
+			font-weight: 600;
+			color: var(--text-main);
+			min-width: 120px;
+			white-space: nowrap;
+			letter-spacing: 0.3px;
+		}
+
+		#tm-label .tm-live-dot {
+			display: inline-block;
+			width: 6px;
+			height: 6px;
+			border-radius: 50%;
+			background: var(--indicator-safe);
+			box-shadow: 0 0 6px rgba(80, 216, 144, 0.6);
+			margin-right: 6px;
+			vertical-align: middle;
+			animation: tm-pulse 1.6s ease-in-out infinite;
+		}
+
+		@keyframes tm-pulse {
+			0%, 100% { opacity: 1; }
+			50% { opacity: 0.35; }
+		}
+
+		#tm-slider {
+			flex: 1;
+			-webkit-appearance: none;
+			appearance: none;
+			height: 3px;
+			border-radius: 2px;
+			background: rgba(77, 168, 218, 0.18);
+			outline: none;
+			cursor: pointer;
+			transition: background 0.2s;
+		}
+
+		#tm-slider::-webkit-slider-thumb {
+			-webkit-appearance: none;
+			appearance: none;
+			width: 14px;
+			height: 14px;
+			border-radius: 50%;
+			background: var(--primary);
+			box-shadow: 0 0 8px rgba(77, 168, 218, 0.55), 0 2px 6px rgba(0,0,0,0.4);
+			cursor: grab;
+			transition: transform 0.15s ease, box-shadow 0.15s ease;
+		}
+
+		#tm-slider::-webkit-slider-thumb:hover {
+			transform: scale(1.2);
+			box-shadow: 0 0 14px rgba(77, 168, 218, 0.8), 0 2px 8px rgba(0,0,0,0.5);
+		}
+
+		#tm-slider::-webkit-slider-thumb:active {
+			cursor: grabbing;
+		}
+
+		#tm-slider::-moz-range-thumb {
+			width: 14px;
+			height: 14px;
+			border-radius: 50%;
+			background: var(--primary);
+			border: none;
+			box-shadow: 0 0 8px rgba(77, 168, 218, 0.55), 0 2px 6px rgba(0,0,0,0.4);
+			cursor: grab;
+		}
+
+		#tm-slider::-moz-range-track {
+			height: 3px;
+			border-radius: 2px;
+			background: rgba(77, 168, 218, 0.18);
+		}
+
+		.tm-live-btn {
+			padding: 6px 16px;
+			border-radius: 20px;
+			font-size: 10px;
+			font-weight: 700;
+			letter-spacing: 0.06em;
+			text-transform: uppercase;
+			color: var(--ink-dark);
+			background: linear-gradient(180deg, #d9eaf7, #b7d9f0);
+			border: 1px solid rgba(77, 168, 218, 0.32);
+			cursor: pointer;
+			box-shadow: 0 4px 14px rgba(77, 168, 218, 0.24);
+			transition: opacity 0.35s ease, transform 0.2s ease;
+			white-space: nowrap;
+			opacity: 1;
+		}
+
+		.tm-live-btn:hover {
+			transform: scale(1.04);
+			box-shadow: 0 6px 18px rgba(77, 168, 218, 0.36);
+		}
+
+		.tm-live-btn.hidden-functional {
+			opacity: 0;
+			pointer-events: none;
+		}
+
+		.feed-badge.archive {
+			background: rgba(141, 153, 174, 0.18);
+			color: #c4d2e4;
+			border-color: rgba(141, 153, 174, 0.28);
+		}
 	</style>
 </head>
 
@@ -1035,6 +1167,15 @@
 		</div>
 	</div>
 
+	<!-- Historical Time Machine Slider -->
+	<div id="time-machine-bar">
+		<div id="time-machine-inner">
+			<div id="tm-label"><span class="tm-live-dot"></span>Apr 2026 — LIVE</div>
+			<input type="range" id="tm-slider" min="0" max="913" value="913" step="1">
+			<button id="tm-live-btn" class="tm-live-btn hidden-functional">See Live Data</button>
+		</div>
+	</div>
+
 	<script type="module">
 		import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js';
 
@@ -1056,6 +1197,13 @@
 			},
 			liveLoopStarted: false,
 			lastLiveStamp: null,
+			// Time Machine state
+			isLive: true,
+			targetYear: 2026,
+			targetMonth: 4,
+			transitionProgress: 0,
+			_livePaused: false,
+			_liveTimeoutId: null,
 		};
 
 		const ZONES = [
@@ -1579,17 +1727,23 @@
 			attribute float aAnomaly;
 			attribute float aTemp;
 			attribute float aSal;
+			attribute vec3 aNextPos;
+			attribute float aNextTemp;
+			attribute float aNextAnomaly;
 			uniform float uTime;
+			uniform float uTransitionProgress;
 			varying float vAnomaly;
 			varying float vTemp;
 			varying float vSal;
 			void main() {
-				vAnomaly = aAnomaly;
-				vTemp = aTemp;
+				float tp = clamp(uTransitionProgress, 0.0, 1.0);
+				vAnomaly = mix(aAnomaly, aNextAnomaly, tp);
+				vTemp = mix(aTemp, aNextTemp, tp);
 				vSal = aSal;
-				vec3 p = position;
-				p.y += sin(position.x * 4.0 + uTime * 0.8) * 0.03;
-				p.y += cos(position.z * 5.0 + uTime * 1.1) * 0.02;
+				vec3 basePos = mix(position, aNextPos, tp);
+				vec3 p = basePos;
+				p.y += sin(basePos.x * 4.0 + uTime * 0.8) * 0.03;
+				p.y += cos(basePos.z * 5.0 + uTime * 1.1) * 0.02;
 				vec4 mv = modelViewMatrix * vec4(p, 1.0);
 				gl_PointSize = 6.2;
 				gl_Position = projectionMatrix * mv;
@@ -1639,6 +1793,11 @@
 			const temp = new Float32Array(sample.length);
 			const sal = new Float32Array(sample.length);
 
+			// Next-state buffers for morphing
+			const nextPos = new Float32Array(sample.length * 3);
+			const nextTemp = new Float32Array(sample.length);
+			const nextAnomaly = new Float32Array(sample.length);
+
 			let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
 			sample.forEach(point => {
 				xMin = Math.min(xMin, point.x);
@@ -1651,12 +1810,22 @@
 			const scale = 1.45 / Math.max(xMax - xMin || 1, yMax - yMin || 1);
 
 			sample.forEach((point, index) => {
-				positions[index * 3] = (point.x - xMid) * scale;
-				positions[index * 3 + 1] = (point.z || 0) * 2.1;
-				positions[index * 3 + 2] = (point.y - yMid) * scale;
+				const px = (point.x - xMid) * scale;
+				const py = (point.z || 0) * 2.1;
+				const pz = (point.y - yMid) * scale;
+				positions[index * 3] = px;
+				positions[index * 3 + 1] = py;
+				positions[index * 3 + 2] = pz;
 				anomaly[index] = point.anomaly || 0;
 				temp[index] = point.temp || 17;
 				sal[index] = point.sal || 33;
+
+				// Initialize next buffers to same values
+				nextPos[index * 3] = px;
+				nextPos[index * 3 + 1] = py;
+				nextPos[index * 3 + 2] = pz;
+				nextTemp[index] = point.temp || 17;
+				nextAnomaly[index] = point.anomaly || 0;
 			});
 
 			const geometry = new THREE.BufferGeometry();
@@ -1664,11 +1833,15 @@
 			geometry.setAttribute('aAnomaly', new THREE.BufferAttribute(anomaly, 1));
 			geometry.setAttribute('aTemp', new THREE.BufferAttribute(temp, 1));
 			geometry.setAttribute('aSal', new THREE.BufferAttribute(sal, 1));
+			geometry.setAttribute('aNextPos', new THREE.BufferAttribute(nextPos, 3));
+			geometry.setAttribute('aNextTemp', new THREE.BufferAttribute(nextTemp, 1));
+			geometry.setAttribute('aNextAnomaly', new THREE.BufferAttribute(nextAnomaly, 1));
 
 			oceanUniforms = {
 				uTime: { value: 0 },
 				uMode: { value: 0 },
 				uAlert: { value: 0 },
+				uTransitionProgress: { value: 0 },
 			};
 
 			const material = new THREE.ShaderMaterial({
@@ -2011,12 +2184,234 @@
 			DashboardState.liveLoopStarted = true;
 
 			const loop = async () => {
+				if (DashboardState._livePaused) {
+					DashboardState._liveTimeoutId = window.setTimeout(loop, 500);
+					return;
+				}
 				await refreshLive();
-				window.setTimeout(loop, 1500);
+				DashboardState._liveTimeoutId = window.setTimeout(loop, 1500);
 			};
 
 			await loop();
 		}
+
+		/* ══════════════════════════════════════════════════════════
+		   HISTORICAL TIME MACHINE – Slider, Tween, Widget Sync
+		   ══════════════════════════════════════════════════════════ */
+
+		const TM_MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+		const TM_MIN_YEAR = 1950;
+		const TM_MAX_YEAR = 2026;
+		const TM_MAX_MONTH = 4; // April 2026
+		const TM_TOTAL_MONTHS = (TM_MAX_YEAR - TM_MIN_YEAR) * 12 + TM_MAX_MONTH; // 913
+
+		function tmIndexToDate(idx) {
+			const month = (idx % 12) + 1;
+			const year = TM_MIN_YEAR + Math.floor(idx / 12);
+			return { year, month };
+		}
+
+		function tmDateToIndex(year, month) {
+			return (year - TM_MIN_YEAR) * 12 + (month - 1);
+		}
+
+		function tmFormatLabel(year, month, isLive) {
+			const name = TM_MONTH_NAMES[month - 1];
+			if (isLive) return `<span class="tm-live-dot"></span>${name} ${year} — LIVE`;
+			return `${name} ${year} — ARCHIVE`;
+		}
+
+		// ── Toggle Live / Historical ──
+		function toggleLive(isLive) {
+			DashboardState.isLive = isLive;
+			DashboardState._livePaused = !isLive;
+
+			const liveBtn = document.getElementById('tm-live-btn');
+			const label = document.getElementById('tm-label');
+
+			if (isLive) {
+				liveBtn.classList.add('hidden-functional');
+				label.innerHTML = tmFormatLabel(TM_MAX_YEAR, TM_MAX_MONTH, true);
+			} else {
+				liveBtn.classList.remove('hidden-functional');
+				label.innerHTML = tmFormatLabel(DashboardState.targetYear, DashboardState.targetMonth, false);
+			}
+		}
+
+		// ── Shader morph tween ──
+		function updateOceanTarget(zoneTemps) {
+			if (!oceanParticles) return;
+			const geo = oceanParticles.geometry;
+			const posAttr = geo.getAttribute('position');
+			const anomalyAttr = geo.getAttribute('aAnomaly');
+			const tempAttr = geo.getAttribute('aTemp');
+			const nextPosAttr = geo.getAttribute('aNextPos');
+			const nextTempAttr = geo.getAttribute('aNextTemp');
+			const nextAnomalyAttr = geo.getAttribute('aNextAnomaly');
+			if (!nextPosAttr || !nextTempAttr || !nextAnomalyAttr) return;
+
+			// First: copy current morph result into "current" buffers
+			const tp = oceanUniforms ? oceanUniforms.uTransitionProgress.value : 0;
+			const count = posAttr.count;
+			for (let i = 0; i < count; i++) {
+				// Lerp current→next based on current progress, then set as new base
+				for (let c = 0; c < 3; c++) {
+					const cur = posAttr.array[i * 3 + c];
+					const nxt = nextPosAttr.array[i * 3 + c];
+					posAttr.array[i * 3 + c] = cur + (nxt - cur) * tp;
+				}
+				const curT = tempAttr.array[i];
+				const nxtT = nextTempAttr.array[i];
+				tempAttr.array[i] = curT + (nxtT - curT) * tp;
+
+				const curA = anomalyAttr.array[i];
+				const nxtA = nextAnomalyAttr.array[i];
+				anomalyAttr.array[i] = curA + (nxtA - curA) * tp;
+			}
+
+			// Now set next buffers to new target values based on zone temperatures
+			const avgTemp = zoneTemps.length ? zoneTemps.reduce((a, b) => a + b, 0) / zoneTemps.length : 17;
+			const baseline = DashboardState.baseline || { temp_mean: 14, temp_std: 3 };
+			const globalAnomaly = (avgTemp - (baseline.temp_mean || 14)) / (baseline.temp_std || 3);
+
+			for (let i = 0; i < count; i++) {
+				// Keep positions the same (particles don't move in space)
+				nextPosAttr.array[i * 3] = posAttr.array[i * 3];
+				nextPosAttr.array[i * 3 + 1] = posAttr.array[i * 3 + 1];
+				nextPosAttr.array[i * 3 + 2] = posAttr.array[i * 3 + 2];
+
+				// Modulate temp and anomaly based on historical zone data
+				const jitter = (Math.random() - 0.5) * 0.4;
+				nextTempAttr.array[i] = avgTemp + jitter * 2;
+				nextAnomalyAttr.array[i] = globalAnomaly + jitter;
+			}
+
+			posAttr.needsUpdate = true;
+			tempAttr.needsUpdate = true;
+			anomalyAttr.needsUpdate = true;
+			nextPosAttr.needsUpdate = true;
+			nextTempAttr.needsUpdate = true;
+			nextAnomalyAttr.needsUpdate = true;
+
+			// Kick off morph tween
+			if (oceanUniforms) oceanUniforms.uTransitionProgress.value = 0;
+			if (DashboardState._morphRaf) cancelAnimationFrame(DashboardState._morphRaf);
+
+			const TWEEN_DURATION = 400;
+			const startTime = performance.now();
+			function tweenStep(now) {
+				const elapsed = now - startTime;
+				const t = Math.min(elapsed / TWEEN_DURATION, 1);
+				// Ease-out cubic
+				const eased = 1 - Math.pow(1 - t, 3);
+				if (oceanUniforms) oceanUniforms.uTransitionProgress.value = eased;
+				if (t < 1) {
+					DashboardState._morphRaf = requestAnimationFrame(tweenStep);
+				} else {
+					DashboardState._morphRaf = null;
+				}
+			}
+			DashboardState._morphRaf = requestAnimationFrame(tweenStep);
+		}
+
+		// ── Historical data fetch ──
+		let _lastHistoricalFetch = 0;
+		async function fetchHistoricalData(year, month) {
+			const fetchId = ++_lastHistoricalFetch;
+			try {
+				const data = await fetchFreshJson(`${API_BASE}/zones/historical?year=${year}&month=${month}`);
+				if (fetchId !== _lastHistoricalFetch) return; // stale
+				DashboardState.zoneStates = data || {};
+
+				// Update all panels
+				renderZoneList();
+				renderTopZoneStrip();
+				updateInsightPanel();
+				updateSignalsPanel();
+				updateFeedPanelHistorical(year, month);
+
+				// Chart: show the temp from this historical window
+				const live = currentZoneState();
+				if (live?.temp_c) updateChart(Number(live.temp_c));
+
+				// Trigger splat morph
+				const temps = Object.values(data || {}).map(z => z.temp_c).filter(Number.isFinite);
+				updateOceanTarget(temps);
+
+			} catch (err) {
+				console.error('[TimeMachine] Fetch failed:', err);
+				document.getElementById('insight-caption').textContent = 'Historical data unavailable for this period.';
+			}
+		}
+
+		// ── Feed panel override for historical mode ──
+		function updateFeedPanelHistorical(year, month) {
+			const badge = document.getElementById('feed-badge');
+			const feedTime = document.getElementById('feed-time');
+			const feedMode = document.getElementById('feed-mode');
+
+			if (badge) {
+				badge.className = 'feed-badge archive';
+				badge.textContent = 'ARCHIVE';
+			}
+			if (feedTime) feedTime.textContent = `${TM_MONTH_NAMES[month - 1]} ${year}`;
+			if (feedMode) feedMode.textContent = 'Historical CalCOFI View';
+		}
+
+		// ── Slider input handler ──
+		const tmSlider = document.getElementById('tm-slider');
+		const tmLabel = document.getElementById('tm-label');
+		const tmLiveBtn = document.getElementById('tm-live-btn');
+
+		tmSlider.addEventListener('input', () => {
+			const idx = parseInt(tmSlider.value, 10);
+			const { year, month } = tmIndexToDate(idx);
+
+			DashboardState.targetYear = year;
+			DashboardState.targetMonth = month;
+
+			const isAtPresent = idx >= TM_TOTAL_MONTHS;
+			if (isAtPresent && !DashboardState.isLive) {
+				toggleLive(true);
+				return;
+			}
+			if (!isAtPresent && DashboardState.isLive) {
+				toggleLive(false);
+			}
+
+			tmLabel.innerHTML = tmFormatLabel(year, month, false);
+			fetchHistoricalData(year, month);
+		});
+
+		// ── "See Live Data" button ──
+		tmLiveBtn.addEventListener('click', () => {
+			// Smoothly animate slider back to present
+			const startVal = parseInt(tmSlider.value, 10);
+			const endVal = TM_TOTAL_MONTHS;
+			const duration = 600;
+			const startTime = performance.now();
+
+			function slideStep(now) {
+				const elapsed = now - startTime;
+				const t = Math.min(elapsed / duration, 1);
+				const eased = 1 - Math.pow(1 - t, 2); // ease-out quad
+				const val = Math.round(startVal + (endVal - startVal) * eased);
+				tmSlider.value = val;
+
+				const { year, month } = tmIndexToDate(val);
+				tmLabel.innerHTML = tmFormatLabel(year, month, false);
+
+				if (t < 1) {
+					requestAnimationFrame(slideStep);
+				} else {
+					// Arrived at present
+					toggleLive(true);
+					refreshLive(); // Immediately fetch live data
+				}
+			}
+			requestAnimationFrame(slideStep);
+		});
+
 
 		window.addEventListener('error', event => {
 			const el = document.getElementById('insight-caption');
