@@ -1,0 +1,980 @@
+{
+  "del-mar": [
+    {
+      "temp_c": 14.099,
+      "salinity": 33.423,
+      "dissolved_oxygen": 5.361,
+      "station_lat": 32.95333,
+      "station_lon": -117.30333,
+      "timestamp": "2024-04-01T09:00:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 14.103,
+      "salinity": 33.426,
+      "dissolved_oxygen": 5.367,
+      "station_lat": 32.95343,
+      "station_lon": -117.30338,
+      "timestamp": "2024-04-01T09:10:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 14.114,
+      "salinity": 33.43,
+      "dissolved_oxygen": 5.372,
+      "station_lat": 32.95352,
+      "station_lon": -117.30343,
+      "timestamp": "2024-04-01T09:20:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 14.138,
+      "salinity": 33.435,
+      "dissolved_oxygen": 5.378,
+      "station_lat": 32.95362,
+      "station_lon": -117.30348,
+      "timestamp": "2024-04-01T09:30:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 14.181,
+      "salinity": 33.442,
+      "dissolved_oxygen": 5.384,
+      "station_lat": 32.95371,
+      "station_lon": -117.30352,
+      "timestamp": "2024-04-01T09:40:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 14.251,
+      "salinity": 33.451,
+      "dissolved_oxygen": 5.39,
+      "station_lat": 32.95381,
+      "station_lon": -117.30357,
+      "timestamp": "2024-04-01T09:50:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 14.357,
+      "salinity": 33.463,
+      "dissolved_oxygen": 5.395,
+      "station_lat": 32.9539,
+      "station_lon": -117.30362,
+      "timestamp": "2024-04-01T10:00:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 14.51,
+      "salinity": 33.479,
+      "dissolved_oxygen": 5.401,
+      "station_lat": 32.954,
+      "station_lon": -117.30367,
+      "timestamp": "2024-04-01T10:10:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 14.719,
+      "salinity": 33.5,
+      "dissolved_oxygen": 5.407,
+      "station_lat": 32.95409,
+      "station_lon": -117.30371,
+      "timestamp": "2024-04-01T10:20:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 14.99,
+      "salinity": 33.526,
+      "dissolved_oxygen": 5.413,
+      "station_lat": 32.95419,
+      "station_lon": -117.30376,
+      "timestamp": "2024-04-01T10:30:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 15.323,
+      "salinity": 33.557,
+      "dissolved_oxygen": 5.418,
+      "station_lat": 32.95429,
+      "station_lon": -117.30381,
+      "timestamp": "2024-04-01T10:40:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 15.711,
+      "salinity": 33.594,
+      "dissolved_oxygen": 5.424,
+      "station_lat": 32.95438,
+      "station_lon": -117.30386,
+      "timestamp": "2024-04-01T10:50:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 16.137,
+      "salinity": 33.633,
+      "dissolved_oxygen": 5.43,
+      "station_lat": 32.95448,
+      "station_lon": -117.3039,
+      "timestamp": "2024-04-01T11:00:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 16.573,
+      "salinity": 33.674,
+      "dissolved_oxygen": 5.436,
+      "station_lat": 32.95457,
+      "station_lon": -117.30395,
+      "timestamp": "2024-04-01T11:10:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 16.986,
+      "salinity": 33.712,
+      "dissolved_oxygen": 5.442,
+      "station_lat": 32.95467,
+      "station_lon": -117.304,
+      "timestamp": "2024-04-01T11:20:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 17.339,
+      "salinity": 33.745,
+      "dissolved_oxygen": 5.447,
+      "station_lat": 32.95476,
+      "station_lon": -117.30405,
+      "timestamp": "2024-04-01T11:30:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 17.596,
+      "salinity": 33.77,
+      "dissolved_oxygen": 5.453,
+      "station_lat": 32.95486,
+      "station_lon": -117.3041,
+      "timestamp": "2024-04-01T11:40:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 17.728,
+      "salinity": 33.785,
+      "dissolved_oxygen": 5.459,
+      "station_lat": 32.95495,
+      "station_lon": -117.30414,
+      "timestamp": "2024-04-01T11:50:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 17.722,
+      "salinity": 33.787,
+      "dissolved_oxygen": 5.465,
+      "station_lat": 32.95505,
+      "station_lon": -117.30419,
+      "timestamp": "2024-04-01T12:00:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 17.576,
+      "salinity": 33.777,
+      "dissolved_oxygen": 5.47,
+      "station_lat": 32.95514,
+      "station_lon": -117.30424,
+      "timestamp": "2024-04-01T12:10:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 17.306,
+      "salinity": 33.757,
+      "dissolved_oxygen": 5.476,
+      "station_lat": 32.95524,
+      "station_lon": -117.30429,
+      "timestamp": "2024-04-01T12:20:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 16.94,
+      "salinity": 33.728,
+      "dissolved_oxygen": 5.482,
+      "station_lat": 32.95533,
+      "station_lon": -117.30433,
+      "timestamp": "2024-04-01T12:30:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 16.514,
+      "salinity": 33.695,
+      "dissolved_oxygen": 5.488,
+      "station_lat": 32.95543,
+      "station_lon": -117.30438,
+      "timestamp": "2024-04-01T12:40:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 16.064,
+      "salinity": 33.659,
+      "dissolved_oxygen": 5.493,
+      "station_lat": 32.95552,
+      "station_lon": -117.30443,
+      "timestamp": "2024-04-01T12:50:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 15.625,
+      "salinity": 33.624,
+      "dissolved_oxygen": 5.499,
+      "station_lat": 32.95562,
+      "station_lon": -117.30448,
+      "timestamp": "2024-04-01T13:00:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 15.224,
+      "salinity": 33.592,
+      "dissolved_oxygen": 5.505,
+      "station_lat": 32.95571,
+      "station_lon": -117.30452,
+      "timestamp": "2024-04-01T13:10:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 14.878,
+      "salinity": 33.566,
+      "dissolved_oxygen": 5.511,
+      "station_lat": 32.95581,
+      "station_lon": -117.30457,
+      "timestamp": "2024-04-01T13:20:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 14.594,
+      "salinity": 33.544,
+      "dissolved_oxygen": 5.516,
+      "station_lat": 32.9559,
+      "station_lon": -117.30462,
+      "timestamp": "2024-04-01T13:30:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 14.371,
+      "salinity": 33.528,
+      "dissolved_oxygen": 5.522,
+      "station_lat": 32.956,
+      "station_lon": -117.30467,
+      "timestamp": "2024-04-01T13:40:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 14.205,
+      "salinity": 33.516,
+      "dissolved_oxygen": 5.528,
+      "station_lat": 32.95609,
+      "station_lon": -117.30471,
+      "timestamp": "2024-04-01T13:50:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 14.086,
+      "salinity": 33.509,
+      "dissolved_oxygen": 5.534,
+      "station_lat": 32.95619,
+      "station_lon": -117.30476,
+      "timestamp": "2024-04-01T14:00:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 14.003,
+      "salinity": 33.505,
+      "dissolved_oxygen": 5.539,
+      "station_lat": 32.95629,
+      "station_lon": -117.30481,
+      "timestamp": "2024-04-01T14:10:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 13.947,
+      "salinity": 33.503,
+      "dissolved_oxygen": 5.545,
+      "station_lat": 32.95638,
+      "station_lon": -117.30486,
+      "timestamp": "2024-04-01T14:20:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 13.909,
+      "salinity": 33.503,
+      "dissolved_oxygen": 5.551,
+      "station_lat": 32.95648,
+      "station_lon": -117.3049,
+      "timestamp": "2024-04-01T14:30:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 13.884,
+      "salinity": 33.503,
+      "dissolved_oxygen": 5.557,
+      "station_lat": 32.95657,
+      "station_lon": -117.30495,
+      "timestamp": "2024-04-01T14:40:00",
+      "zone": "Del Mar"
+    },
+    {
+      "temp_c": 13.867,
+      "salinity": 33.505,
+      "dissolved_oxygen": 5.562,
+      "station_lat": 32.95667,
+      "station_lon": -117.305,
+      "timestamp": "2024-04-01T14:50:00",
+      "zone": "Del Mar"
+    }
+  ],
+  "point-loma": [
+    {
+      "temp_c": 11.714,
+      "salinity": 33.692,
+      "dissolved_oxygen": 4.371,
+      "station_lat": 32.71667,
+      "station_lon": -117.36667,
+      "timestamp": "2024-04-01T09:00:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 11.749,
+      "salinity": 33.688,
+      "dissolved_oxygen": 4.373,
+      "station_lat": 32.71419,
+      "station_lon": -117.36409,
+      "timestamp": "2024-04-01T09:10:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 11.79,
+      "salinity": 33.685,
+      "dissolved_oxygen": 4.373,
+      "station_lat": 32.71171,
+      "station_lon": -117.36152,
+      "timestamp": "2024-04-01T09:20:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 11.841,
+      "salinity": 33.68,
+      "dissolved_oxygen": 4.371,
+      "station_lat": 32.70924,
+      "station_lon": -117.35895,
+      "timestamp": "2024-04-01T09:30:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 11.908,
+      "salinity": 33.676,
+      "dissolved_oxygen": 4.366,
+      "station_lat": 32.70676,
+      "station_lon": -117.35638,
+      "timestamp": "2024-04-01T09:40:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 11.997,
+      "salinity": 33.67,
+      "dissolved_oxygen": 4.357,
+      "station_lat": 32.70429,
+      "station_lon": -117.35381,
+      "timestamp": "2024-04-01T09:50:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 12.116,
+      "salinity": 33.663,
+      "dissolved_oxygen": 4.342,
+      "station_lat": 32.70181,
+      "station_lon": -117.35124,
+      "timestamp": "2024-04-01T10:00:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 12.273,
+      "salinity": 33.655,
+      "dissolved_oxygen": 4.32,
+      "station_lat": 32.69933,
+      "station_lon": -117.34867,
+      "timestamp": "2024-04-01T10:10:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 12.476,
+      "salinity": 33.646,
+      "dissolved_oxygen": 4.288,
+      "station_lat": 32.69686,
+      "station_lon": -117.34609,
+      "timestamp": "2024-04-01T10:20:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 12.73,
+      "salinity": 33.634,
+      "dissolved_oxygen": 4.247,
+      "station_lat": 32.69438,
+      "station_lon": -117.34352,
+      "timestamp": "2024-04-01T10:30:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 13.035,
+      "salinity": 33.621,
+      "dissolved_oxygen": 4.196,
+      "station_lat": 32.6919,
+      "station_lon": -117.34095,
+      "timestamp": "2024-04-01T10:40:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 13.385,
+      "salinity": 33.606,
+      "dissolved_oxygen": 4.136,
+      "station_lat": 32.68943,
+      "station_lon": -117.33838,
+      "timestamp": "2024-04-01T10:50:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 13.766,
+      "salinity": 33.589,
+      "dissolved_oxygen": 4.07,
+      "station_lat": 32.68695,
+      "station_lon": -117.33581,
+      "timestamp": "2024-04-01T11:00:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 14.155,
+      "salinity": 33.573,
+      "dissolved_oxygen": 4.002,
+      "station_lat": 32.68448,
+      "station_lon": -117.33324,
+      "timestamp": "2024-04-01T11:10:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 14.526,
+      "salinity": 33.557,
+      "dissolved_oxygen": 3.938,
+      "station_lat": 32.682,
+      "station_lon": -117.33067,
+      "timestamp": "2024-04-01T11:20:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 14.847,
+      "salinity": 33.543,
+      "dissolved_oxygen": 3.884,
+      "station_lat": 32.67952,
+      "station_lon": -117.32809,
+      "timestamp": "2024-04-01T11:30:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 15.089,
+      "salinity": 33.532,
+      "dissolved_oxygen": 3.845,
+      "station_lat": 32.67705,
+      "station_lon": -117.32552,
+      "timestamp": "2024-04-01T11:40:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 15.23,
+      "salinity": 33.524,
+      "dissolved_oxygen": 3.826,
+      "station_lat": 32.67457,
+      "station_lon": -117.32295,
+      "timestamp": "2024-04-01T11:50:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 15.256,
+      "salinity": 33.521,
+      "dissolved_oxygen": 3.829,
+      "station_lat": 32.67209,
+      "station_lon": -117.32038,
+      "timestamp": "2024-04-01T12:00:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 15.168,
+      "salinity": 33.522,
+      "dissolved_oxygen": 3.854,
+      "station_lat": 32.66962,
+      "station_lon": -117.31781,
+      "timestamp": "2024-04-01T12:10:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 14.978,
+      "salinity": 33.527,
+      "dissolved_oxygen": 3.899,
+      "station_lat": 32.66714,
+      "station_lon": -117.31524,
+      "timestamp": "2024-04-01T12:20:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 14.709,
+      "salinity": 33.534,
+      "dissolved_oxygen": 3.96,
+      "station_lat": 32.66467,
+      "station_lon": -117.31267,
+      "timestamp": "2024-04-01T12:30:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 14.391,
+      "salinity": 33.543,
+      "dissolved_oxygen": 4.03,
+      "station_lat": 32.66219,
+      "station_lon": -117.31009,
+      "timestamp": "2024-04-01T12:40:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 14.054,
+      "salinity": 33.554,
+      "dissolved_oxygen": 4.104,
+      "station_lat": 32.65971,
+      "station_lon": -117.30752,
+      "timestamp": "2024-04-01T12:50:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 13.725,
+      "salinity": 33.563,
+      "dissolved_oxygen": 4.176,
+      "station_lat": 32.65724,
+      "station_lon": -117.30495,
+      "timestamp": "2024-04-01T13:00:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 13.428,
+      "salinity": 33.572,
+      "dissolved_oxygen": 4.242,
+      "station_lat": 32.65476,
+      "station_lon": -117.30238,
+      "timestamp": "2024-04-01T13:10:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 13.175,
+      "salinity": 33.579,
+      "dissolved_oxygen": 4.299,
+      "station_lat": 32.65229,
+      "station_lon": -117.29981,
+      "timestamp": "2024-04-01T13:20:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 12.973,
+      "salinity": 33.584,
+      "dissolved_oxygen": 4.346,
+      "station_lat": 32.64981,
+      "station_lon": -117.29724,
+      "timestamp": "2024-04-01T13:30:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 12.823,
+      "salinity": 33.587,
+      "dissolved_oxygen": 4.384,
+      "station_lat": 32.64733,
+      "station_lon": -117.29467,
+      "timestamp": "2024-04-01T13:40:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 12.718,
+      "salinity": 33.588,
+      "dissolved_oxygen": 4.412,
+      "station_lat": 32.64486,
+      "station_lon": -117.29209,
+      "timestamp": "2024-04-01T13:50:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 12.652,
+      "salinity": 33.589,
+      "dissolved_oxygen": 4.433,
+      "station_lat": 32.64238,
+      "station_lon": -117.28952,
+      "timestamp": "2024-04-01T14:00:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 12.615,
+      "salinity": 33.588,
+      "dissolved_oxygen": 4.449,
+      "station_lat": 32.6399,
+      "station_lon": -117.28695,
+      "timestamp": "2024-04-01T14:10:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 12.601,
+      "salinity": 33.586,
+      "dissolved_oxygen": 4.46,
+      "station_lat": 32.63743,
+      "station_lon": -117.28438,
+      "timestamp": "2024-04-01T14:20:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 12.602,
+      "salinity": 33.584,
+      "dissolved_oxygen": 4.467,
+      "station_lat": 32.63495,
+      "station_lon": -117.28181,
+      "timestamp": "2024-04-01T14:30:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 12.613,
+      "salinity": 33.581,
+      "dissolved_oxygen": 4.473,
+      "station_lat": 32.63248,
+      "station_lon": -117.27924,
+      "timestamp": "2024-04-01T14:40:00",
+      "zone": "Point Loma"
+    },
+    {
+      "temp_c": 12.631,
+      "salinity": 33.578,
+      "dissolved_oxygen": 4.478,
+      "station_lat": 32.63,
+      "station_lon": -117.27667,
+      "timestamp": "2024-04-01T14:50:00",
+      "zone": "Point Loma"
+    }
+  ],
+  "south-bay": [
+    {
+      "temp_c": 14.721,
+      "salinity": 33.571,
+      "dissolved_oxygen": 5.333,
+      "station_lat": 32.59167,
+      "station_lon": -117.30833,
+      "timestamp": "2024-04-01T09:00:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.715,
+      "salinity": 33.569,
+      "dissolved_oxygen": 5.357,
+      "station_lat": 32.59071,
+      "station_lon": -117.30429,
+      "timestamp": "2024-04-01T09:10:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.712,
+      "salinity": 33.565,
+      "dissolved_oxygen": 5.381,
+      "station_lat": 32.58976,
+      "station_lon": -117.30024,
+      "timestamp": "2024-04-01T09:20:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.714,
+      "salinity": 33.562,
+      "dissolved_oxygen": 5.404,
+      "station_lat": 32.58881,
+      "station_lon": -117.29619,
+      "timestamp": "2024-04-01T09:30:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.725,
+      "salinity": 33.558,
+      "dissolved_oxygen": 5.427,
+      "station_lat": 32.58786,
+      "station_lon": -117.29214,
+      "timestamp": "2024-04-01T09:40:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.747,
+      "salinity": 33.554,
+      "dissolved_oxygen": 5.448,
+      "station_lat": 32.5869,
+      "station_lon": -117.28809,
+      "timestamp": "2024-04-01T09:50:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.784,
+      "salinity": 33.549,
+      "dissolved_oxygen": 5.467,
+      "station_lat": 32.58595,
+      "station_lon": -117.28405,
+      "timestamp": "2024-04-01T10:00:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.842,
+      "salinity": 33.543,
+      "dissolved_oxygen": 5.484,
+      "station_lat": 32.585,
+      "station_lon": -117.28,
+      "timestamp": "2024-04-01T10:10:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.923,
+      "salinity": 33.537,
+      "dissolved_oxygen": 5.498,
+      "station_lat": 32.58405,
+      "station_lon": -117.27595,
+      "timestamp": "2024-04-01T10:20:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 15.031,
+      "salinity": 33.528,
+      "dissolved_oxygen": 5.509,
+      "station_lat": 32.58309,
+      "station_lon": -117.2719,
+      "timestamp": "2024-04-01T10:30:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 15.165,
+      "salinity": 33.519,
+      "dissolved_oxygen": 5.518,
+      "station_lat": 32.58214,
+      "station_lon": -117.26786,
+      "timestamp": "2024-04-01T10:40:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 15.323,
+      "salinity": 33.509,
+      "dissolved_oxygen": 5.523,
+      "station_lat": 32.58119,
+      "station_lon": -117.26381,
+      "timestamp": "2024-04-01T10:50:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 15.496,
+      "salinity": 33.498,
+      "dissolved_oxygen": 5.527,
+      "station_lat": 32.58024,
+      "station_lon": -117.25976,
+      "timestamp": "2024-04-01T11:00:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 15.674,
+      "salinity": 33.486,
+      "dissolved_oxygen": 5.531,
+      "station_lat": 32.57929,
+      "station_lon": -117.25571,
+      "timestamp": "2024-04-01T11:10:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 15.843,
+      "salinity": 33.476,
+      "dissolved_oxygen": 5.535,
+      "station_lat": 32.57833,
+      "station_lon": -117.25167,
+      "timestamp": "2024-04-01T11:20:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 15.985,
+      "salinity": 33.466,
+      "dissolved_oxygen": 5.542,
+      "station_lat": 32.57738,
+      "station_lon": -117.24762,
+      "timestamp": "2024-04-01T11:30:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 16.087,
+      "salinity": 33.458,
+      "dissolved_oxygen": 5.554,
+      "station_lat": 32.57643,
+      "station_lon": -117.24357,
+      "timestamp": "2024-04-01T11:40:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 16.135,
+      "salinity": 33.453,
+      "dissolved_oxygen": 5.572,
+      "station_lat": 32.57548,
+      "station_lon": -117.23952,
+      "timestamp": "2024-04-01T11:50:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 16.125,
+      "salinity": 33.45,
+      "dissolved_oxygen": 5.597,
+      "station_lat": 32.57452,
+      "station_lon": -117.23548,
+      "timestamp": "2024-04-01T12:00:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 16.055,
+      "salinity": 33.45,
+      "dissolved_oxygen": 5.629,
+      "station_lat": 32.57357,
+      "station_lon": -117.23143,
+      "timestamp": "2024-04-01T12:10:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 15.932,
+      "salinity": 33.452,
+      "dissolved_oxygen": 5.666,
+      "station_lat": 32.57262,
+      "station_lon": -117.22738,
+      "timestamp": "2024-04-01T12:20:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 15.769,
+      "salinity": 33.456,
+      "dissolved_oxygen": 5.708,
+      "station_lat": 32.57167,
+      "station_lon": -117.22333,
+      "timestamp": "2024-04-01T12:30:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 15.579,
+      "salinity": 33.462,
+      "dissolved_oxygen": 5.753,
+      "station_lat": 32.57071,
+      "station_lon": -117.21929,
+      "timestamp": "2024-04-01T12:40:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 15.38,
+      "salinity": 33.468,
+      "dissolved_oxygen": 5.799,
+      "station_lat": 32.56976,
+      "station_lon": -117.21524,
+      "timestamp": "2024-04-01T12:50:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 15.185,
+      "salinity": 33.473,
+      "dissolved_oxygen": 5.845,
+      "station_lat": 32.56881,
+      "station_lon": -117.21119,
+      "timestamp": "2024-04-01T13:00:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 15.006,
+      "salinity": 33.478,
+      "dissolved_oxygen": 5.888,
+      "station_lat": 32.56786,
+      "station_lon": -117.20714,
+      "timestamp": "2024-04-01T13:10:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.851,
+      "salinity": 33.482,
+      "dissolved_oxygen": 5.929,
+      "station_lat": 32.5669,
+      "station_lon": -117.20309,
+      "timestamp": "2024-04-01T13:20:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.722,
+      "salinity": 33.485,
+      "dissolved_oxygen": 5.967,
+      "station_lat": 32.56595,
+      "station_lon": -117.19905,
+      "timestamp": "2024-04-01T13:30:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.62,
+      "salinity": 33.486,
+      "dissolved_oxygen": 6.002,
+      "station_lat": 32.565,
+      "station_lon": -117.195,
+      "timestamp": "2024-04-01T13:40:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.541,
+      "salinity": 33.486,
+      "dissolved_oxygen": 6.035,
+      "station_lat": 32.56405,
+      "station_lon": -117.19095,
+      "timestamp": "2024-04-01T13:50:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.483,
+      "salinity": 33.486,
+      "dissolved_oxygen": 6.065,
+      "station_lat": 32.56309,
+      "station_lon": -117.1869,
+      "timestamp": "2024-04-01T14:00:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.44,
+      "salinity": 33.484,
+      "dissolved_oxygen": 6.093,
+      "station_lat": 32.56214,
+      "station_lon": -117.18286,
+      "timestamp": "2024-04-01T14:10:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.408,
+      "salinity": 33.483,
+      "dissolved_oxygen": 6.12,
+      "station_lat": 32.56119,
+      "station_lon": -117.17881,
+      "timestamp": "2024-04-01T14:20:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.384,
+      "salinity": 33.481,
+      "dissolved_oxygen": 6.147,
+      "station_lat": 32.56024,
+      "station_lon": -117.17476,
+      "timestamp": "2024-04-01T14:30:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.366,
+      "salinity": 33.478,
+      "dissolved_oxygen": 6.172,
+      "station_lat": 32.55929,
+      "station_lon": -117.17071,
+      "timestamp": "2024-04-01T14:40:00",
+      "zone": "South Bay"
+    },
+    {
+      "temp_c": 14.351,
+      "salinity": 33.476,
+      "dissolved_oxygen": 6.197,
+      "station_lat": 32.55833,
+      "station_lon": -117.16667,
+      "timestamp": "2024-04-01T14:50:00",
+      "zone": "South Bay"
+    }
+  ]
+}

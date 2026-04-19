@@ -28,3 +28,11 @@ splats.json
 # Sphinx / notebooks
 docs/build/
 .ipynb_checkpoints/
+# macOS and Python clutter
+.DS_Store
+__pycache__/
+*.pyc
+
+# large local raw datasets
+data/CalCOFI_Database_194903-202105_csv_16October2023.zip
+data/CalCOFI_Database_194903-202105_csv_16October2023/

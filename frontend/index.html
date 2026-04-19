@@ -2,1481 +2,1898 @@
 <html lang="en">
 
 <head>
+	<script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
+	<link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Aegis Ocean — Kelp Crisis Monitor</title>
+	<title>Aegis Ocean Dashboard V1</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 	<style>
 		:root {
-			--cyan: #00ffcc;
-			--red: #ff3344;
-			--purple: #cc44ff;
-			--green: #00ff88;
-			--orange: #ff6600;
-			--blue: #0088ff;
-			--bg: #000d1a;
-			--panel: rgba(0, 18, 40, 0.88);
-			--border: rgba(0, 255, 204, 0.18);
+			--bg-color: #060b14;
+			--panel-bg: rgba(16, 24, 38, 0.56);
+			--panel-border: rgba(125, 170, 205, 0.12);
+			--text-main: #edf5ff;
+			--text-muted: #8d99ae;
+			--primary: #4da8da;
+			--primary-soft: rgba(77, 168, 218, 0.16);
+			--line-soft: rgba(122, 150, 184, 0.14);
+			--ink-dark: #08131f;
+			--indicator-nominal: #4da8da;
+			--indicator-warning: #de7237;
+			--indicator-danger: #ff5a5f;
+			--indicator-safe: #50d890;
 		}
 
 		* {
 			box-sizing: border-box;
 			margin: 0;
 			padding: 0;
+			font-family: 'Inter', sans-serif;
+		}
+
+		html,
+		body {
+			height: 100%;
 		}
 
 		body {
-			background: var(--bg);
-			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-			color: white;
-			display: flex;
-			flex-direction: column;
-			height: 100vh;
+			background:
+				radial-gradient(circle at 18% 18%, rgba(77, 168, 218, 0.14) 0%, transparent 24%),
+				radial-gradient(circle at 82% 12%, rgba(168, 85, 247, 0.08) 0%, transparent 20%),
+				radial-gradient(circle at center, #0b1a2c 0%, var(--bg-color) 100%);
+			color: var(--text-main);
 			overflow: hidden;
+			font-size: 12px;
 		}
 
-		/* ── TOP BAR ── */
+		#canvas-container {
+			position: absolute;
+			inset: 0;
+			overflow: hidden;
+			background: none;
+		}
+
+		#view-2d-map {
+			position: absolute;
+			inset: 0;
+			z-index: 1;
+			background: radial-gradient(circle at 40% 60%, #004b63 0%, #031521 60%, #010408 100%);
+			opacity: 1;
+			transition: opacity 0.7s ease;
+		}
+
+		#map-zone-labels {
+			position: absolute;
+			inset: 0;
+			z-index: 3;
+			pointer-events: none;
+		}
+
+		#view-2d-map.hidden {
+			opacity: 0;
+			pointer-events: none;
+		}
+
+		#view-3d-underwater {
+			position: absolute;
+			inset: 0;
+			z-index: 2;
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity 0.7s ease;
+		}
+
+		#view-3d-underwater.active {
+			opacity: 1;
+			pointer-events: auto;
+		}
+
+		#dive-overlay {
+			position: absolute;
+			inset: 0;
+			background: radial-gradient(circle at center, transparent 0%, #000 100%);
+			background-color: rgba(0, 0, 0, 0);
+			pointer-events: none;
+			z-index: 50;
+			opacity: 0;
+			transition: opacity 0.8s ease, background-color 0.8s ease;
+		}
+
+		#dive-overlay.diving {
+			opacity: 1;
+			background-color: rgba(0, 0, 10, 1);
+		}
+
+		#ui-layer {
+			position: absolute;
+			inset: 0;
+			z-index: 10;
+			display: flex;
+			flex-direction: column;
+			pointer-events: none;
+		}
+
 		#topbar {
-			height: 42px;
-			background: rgba(0, 8, 22, 0.95);
-			border-bottom: 1px solid var(--border);
+			height: 60px;
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
-			padding: 0 14px;
-			flex-shrink: 0;
+			padding: 0 24px;
 			z-index: 20;
-		}
-
-		#topbar-left {
-			display: flex;
-			align-items: center;
-			gap: 10px;
-		}
-
-		.logo-dot {
-			width: 9px;
-			height: 9px;
-			border-radius: 50%;
-			background: var(--cyan);
-			box-shadow: 0 0 10px var(--cyan);
-			animation: pulse-dot 2s ease-in-out infinite;
-		}
-
-		@keyframes pulse-dot {
-
-			0%,
-			100% {
-				opacity: 1;
-				transform: scale(1);
-			}
-
-			50% {
-				opacity: 0.5;
-				transform: scale(0.75);
-			}
+			pointer-events: auto;
+			background: linear-gradient(180deg, rgba(8, 12, 18, 0.44), rgba(8, 12, 18, 0.08));
+			backdrop-filter: blur(14px);
 		}
 
 		.title-main {
-			font-size: 15px;
-			font-weight: 800;
-			letter-spacing: 2.5px;
-			color: var(--cyan);
+			font-size: 18px;
+			font-weight: 700;
+			letter-spacing: 0.5px;
+			color: var(--text-main);
+		}
+
+		.title-v1 {
+			color: var(--primary);
 		}
 
 		.title-sub {
-			font-size: 9px;
-			color: rgba(255, 255, 255, 0.4);
-			letter-spacing: 1.5px;
-			margin-top: 1px;
-		}
-
-		#topbar-center {
-			display: flex;
-			gap: 10px;
-			align-items: center;
-		}
-
-		.stat-pill {
-			background: rgba(0, 255, 204, 0.06);
-			border: 1px solid var(--border);
-			border-radius: 16px;
-			padding: 3px 11px;
-			display: flex;
-			align-items: center;
-			gap: 5px;
-		}
-
-		.stat-pill-label {
-			color: rgba(255, 255, 255, 0.4);
-			font-size: 9px;
-		}
-
-		.stat-pill-value {
-			color: var(--cyan);
-			font-weight: 700;
-			font-variant-numeric: tabular-nums;
-		}
-
-		#alert-badge {
-			padding: 4px 12px;
-			border-radius: 16px;
 			font-size: 10px;
-			font-weight: 700;
-			letter-spacing: 1px;
-			border: 1px solid;
-			cursor: default;
-			transition: all 0.4s;
+			letter-spacing: 0.9px;
+			color: rgba(186, 205, 228, 0.54);
+			margin-top: 2px;
 		}
 
-		#alert-badge.nominal {
-			background: rgba(0, 255, 136, 0.08);
-			border-color: rgba(0, 255, 136, 0.35);
-			color: var(--green);
-		}
-
-		#alert-badge.anomaly {
-			background: rgba(255, 51, 68, 0.18);
-			border-color: var(--red);
-			color: var(--red);
-			animation: pulse-alert 1.2s ease-in-out infinite;
-		}
-
-		@keyframes pulse-alert {
-
-			0%,
-			100% {
-				box-shadow: 0 0 0 0 rgba(255, 51, 68, 0.5);
-			}
-
-			50% {
-				box-shadow: 0 0 0 7px rgba(255, 51, 68, 0);
-			}
-		}
-
-		.sim-badge {
-			background: rgba(255, 204, 0, 0.1);
-			color: #ffcc00;
-			border: 1px solid rgba(255, 204, 0, 0.3);
-			font-size: 9px;
-			padding: 2px 7px;
-			border-radius: 4px;
-			letter-spacing: 0.5px;
-			display: none;
-		}
-
-		#topbar-right {
+		.top-zone-strip {
 			display: flex;
-			align-items: center;
-			gap: 10px;
+			flex-direction: column;
+			gap: 8px;
+			width: 100%;
 		}
 
-		#clock {
+		.top-zone-chip {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			justify-content: space-between;
+			width: 100%;
+			padding: 7px 12px;
+			border-radius: 12px;
+			background: rgba(8, 17, 29, 0.52);
+			border: 1px solid var(--panel-border);
+			color: #d9ebfb;
 			font-size: 11px;
-			color: rgba(255, 255, 255, 0.35);
-			font-variant-numeric: tabular-nums;
-		}
-
-		#voice-btn {
-			background: rgba(0, 255, 204, 0.1);
-			border: 1px solid rgba(0, 255, 204, 0.5);
-			color: var(--cyan);
-			padding: 4px 13px;
-			border-radius: 5px;
-			font-size: 10px;
-			font-weight: 700;
+			font-weight: 500;
 			cursor: pointer;
-			letter-spacing: 1px;
-			transition: all 0.2s;
+			backdrop-filter: blur(12px);
+			transition: all 0.2s ease;
+			white-space: nowrap;
 		}
 
-		#voice-btn:hover {
-			background: rgba(0, 255, 204, 0.22);
+		.top-zone-chip:hover {
+			border-color: rgba(77, 168, 218, 0.32);
+			background: rgba(77, 168, 218, 0.08);
 		}
 
-		/* ── LAYOUT ── */
+		.top-zone-chip.active {
+			background: rgba(77, 168, 218, 0.14);
+			border-color: rgba(77, 168, 218, 0.42);
+			box-shadow: 0 0 0 1px rgba(77, 168, 218, 0.14);
+		}
+
+		.top-zone-dot {
+			width: 8px;
+			height: 8px;
+			border-radius: 50%;
+			flex-shrink: 0;
+		}
+
+		.top-zone-status {
+			color: rgba(214, 227, 243, 0.72);
+			font-size: 10px;
+		}
+
+		.view-toggle-container {
+			position: absolute;
+			left: 50%;
+			transform: translateX(-50%);
+			display: flex;
+			background: rgba(8, 17, 29, 0.56);
+			border: 1px solid var(--panel-border);
+			border-radius: 20px;
+			padding: 3px;
+			z-index: 30;
+			pointer-events: auto;
+		}
+
+		.view-pill {
+			padding: 6px 18px;
+			border-radius: 17px;
+			font-size: 11px;
+			font-weight: 500;
+			color: rgba(186, 205, 228, 0.62);
+			cursor: pointer;
+			transition: all 0.3s;
+			position: relative;
+			z-index: 2;
+			user-select: none;
+		}
+
+		.view-pill.active {
+			color: var(--ink-dark);
+			font-weight: 600;
+		}
+
+		.view-pill-bg {
+			position: absolute;
+			top: 3px;
+			left: 3px;
+			bottom: 3px;
+			width: 110px;
+			background: linear-gradient(180deg, #d9eaf7, #b7d9f0);
+			border-radius: 17px;
+			transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+			z-index: 1;
+			box-shadow: 0 8px 18px rgba(77, 168, 218, 0.18);
+		}
+
 		#main {
 			flex: 1;
 			display: flex;
-			overflow: hidden;
+			justify-content: space-between;
+			padding: 0 24px 24px;
+			gap: 16px;
 		}
 
 		.sidebar {
-			width: 252px;
-			flex-shrink: 0;
-			overflow-y: auto;
-			padding: 10px;
+			width: 280px;
 			display: flex;
 			flex-direction: column;
-			gap: 9px;
-			background: rgba(0, 8, 22, 0.75);
+			gap: 16px;
+			flex-shrink: 0;
+			pointer-events: auto;
+			z-index: 10;
 		}
 
-		#sidebar-left {
-			border-right: 1px solid var(--border);
-		}
-
-		#sidebar-right {
-			border-left: 1px solid var(--border);
-		}
-
-		.sidebar::-webkit-scrollbar {
-			width: 3px;
-		}
-
-		.sidebar::-webkit-scrollbar-thumb {
-			background: rgba(0, 255, 204, 0.18);
-			border-radius: 2px;
+		.center-gap {
+			flex: 1;
+			position: relative;
+			pointer-events: none;
 		}
 
 		.panel {
-			background: var(--panel);
-			border: 1px solid var(--border);
-			border-radius: 10px;
-			padding: 11px;
-			backdrop-filter: blur(10px);
+			background: var(--panel-bg);
+			backdrop-filter: blur(16px) saturate(180%);
+			-webkit-backdrop-filter: blur(16px) saturate(180%);
+			border: 1px solid var(--panel-border);
+			border-radius: 12px;
+			padding: 16px;
+			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+			display: flex;
+			flex-direction: column;
 		}
 
 		.panel-title {
-			font-size: 8px;
-			font-weight: 700;
-			letter-spacing: 2px;
-			color: rgba(255, 255, 255, 0.35);
-			margin-bottom: 9px;
+			font-size: 11px;
+			font-weight: 600;
 			text-transform: uppercase;
+			letter-spacing: 1px;
+			color: var(--text-main);
+			margin-bottom: 14px;
 		}
 
-		.sensor-row {
+		.video-box {
+			background: linear-gradient(180deg, #132433 0%, #0b1622 100%);
+			border-radius: 8px;
+			height: 148px;
+			position: relative;
 			display: flex;
-			justify-content: space-between;
 			align-items: center;
-			margin-bottom: 7px;
-		}
-
-		.sensor-label {
-			font-size: 11px;
-			color: rgba(136, 204, 255, 0.75);
-		}
-
-		.sensor-value {
-			font-size: 21px;
-			font-weight: 700;
-			color: var(--cyan);
-			text-shadow: 0 0 12px rgba(0, 255, 204, 0.35);
-			font-variant-numeric: tabular-nums;
-		}
-
-		.sensor-unit {
-			font-size: 11px;
-			color: rgba(0, 255, 204, 0.55);
-		}
-
-		.progress-bar-wrap {
-			background: rgba(255, 255, 255, 0.05);
-			border-radius: 3px;
-			height: 4px;
-			margin-top: 3px;
+			justify-content: center;
+			border: 1px solid var(--line-soft);
 			overflow: hidden;
 		}
 
-		.progress-bar-fill {
-			height: 100%;
-			border-radius: 3px;
-			transition: width 0.6s ease;
+		.video-box::before {
+			content: '';
+			position: absolute;
+			inset: 0;
+			background: radial-gradient(circle at 50% 20%, rgba(77, 168, 218, 0.3), transparent 40%);
 		}
 
-		.status-pill {
+		.feed-overlay {
+			position: absolute;
+			inset: 0;
+			padding: 14px;
+			display: flex;
+			flex-direction: column;
+			justify-content: space-between;
+		}
+
+		.feed-header {
+			display: flex;
+			align-items: flex-start;
+			justify-content: space-between;
+			gap: 10px;
+		}
+
+		.feed-title {
+			font-size: 18px;
+			font-weight: 700;
+			color: var(--text-main);
+			text-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+		}
+
+		.feed-badge {
 			display: inline-flex;
 			align-items: center;
-			gap: 5px;
-			padding: 3px 10px;
-			border-radius: 12px;
-			font-size: 10px;
-			font-weight: 700;
-			letter-spacing: 1px;
-		}
-
-		.status-pill.nominal {
-			background: rgba(0, 255, 136, 0.08);
-			color: var(--green);
-			border: 1px solid rgba(0, 255, 136, 0.28);
-		}
-
-		.status-pill.anomaly {
-			background: rgba(255, 51, 68, 0.12);
-			color: var(--red);
-			border: 1px solid rgba(255, 51, 68, 0.38);
-		}
-
-		.status-dot {
-			width: 5px;
-			height: 5px;
-			border-radius: 50%;
-			background: currentColor;
-		}
-
-		#insight-text {
-			font-size: 10.5px;
-			color: rgba(255, 255, 255, 0.6);
-			line-height: 1.55;
-			font-style: italic;
-			min-height: 34px;
-		}
-
-		.calib-btn {
-			width: 100%;
-			background: transparent;
-			border: 1px solid rgba(255, 204, 0, 0.28);
-			color: rgba(255, 204, 0, 0.75);
-			padding: 5px;
-			border-radius: 5px;
+			padding: 4px 8px;
+			border-radius: 999px;
 			font-size: 9px;
-			cursor: pointer;
-			margin-top: 8px;
-			transition: all 0.2s;
-			letter-spacing: 0.5px;
+			font-weight: 700;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			border: 1px solid rgba(157, 188, 214, 0.16);
+			background: rgba(126, 154, 184, 0.12);
+			color: rgba(223, 236, 248, 0.86);
+			flex-shrink: 0;
 		}
 
-		.calib-btn:hover {
-			background: rgba(255, 204, 0, 0.07);
+		.feed-badge.watch {
+			background: rgba(222, 114, 55, 0.16);
+			color: #ffd3b3;
+			border-color: rgba(222, 114, 55, 0.24);
+		}
+
+		.feed-badge.alert {
+			background: rgba(255, 90, 95, 0.18);
+			color: #ffd6d8;
+			border-color: rgba(255, 90, 95, 0.28);
+		}
+
+		.feed-badge.normal {
+			background: rgba(80, 216, 144, 0.12);
+			color: #d8ffe9;
+			border-color: rgba(80, 216, 144, 0.2);
+		}
+
+		.feed-subcopy {
+			margin-top: 10px;
+			max-width: 82%;
+			font-size: 10px;
+			line-height: 1.45;
+			color: rgba(220, 232, 245, 0.76);
+			text-shadow: 0 8px 18px rgba(0, 0, 0, 0.38);
+		}
+
+		.feed-meta {
+			display: flex;
+			justify-content: space-between;
+			font-size: 10px;
+			color: rgba(222, 232, 245, 0.74);
+		}
+
+		.feed-meta-right {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+		}
+
+		.feed-pulse {
+			width: 8px;
+			height: 8px;
+			border-radius: 50%;
+			background: rgba(77, 168, 218, 0.28);
+			box-shadow: 0 0 0 0 rgba(77, 168, 218, 0.0);
+			transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+		}
+
+		.feed-pulse.active {
+			background: rgba(80, 216, 144, 0.95);
+			box-shadow: 0 0 12px rgba(80, 216, 144, 0.55);
+			transform: scale(1.18);
+		}
+
+		.big-temp {
+			font-size: 42px;
+			font-weight: 700;
+			color: var(--primary);
+			margin-bottom: 16px;
+			line-height: 1;
+		}
+
+		.insight-caption {
+			font-size: 11px;
+			color: var(--text-muted);
+			line-height: 1.55;
+			margin-bottom: 16px;
+			min-height: 50px;
+		}
+
+		.insight-row {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-bottom: 12px;
+			font-size: 11px;
+			color: var(--text-muted);
+		}
+
+		.insight-row span {
+			width: 70px;
+		}
+
+		.insight-row .val {
+			width: 54px;
+			text-align: right;
+			color: var(--text-main);
+			font-weight: 500;
+		}
+
+		.bar-wrap {
+			flex: 1;
+			height: 6px;
+			background: rgba(179, 201, 228, 0.12);
+			border-radius: 3px;
+			margin: 0 10px;
+			overflow: hidden;
+		}
+
+		.bar-fill {
+			height: 100%;
+			background: var(--primary);
+			width: 50%;
+			border-radius: 3px;
+			transition: width 0.45s ease;
 		}
 
 		#temp-chart {
 			width: 100%;
-			height: 50px;
+			height: 80px;
+			margin-top: 10px;
+			position: relative;
+		}
+
+		.chart-labels {
+			display: flex;
+			justify-content: space-between;
+			font-size: 9px;
+			color: var(--text-muted);
+			margin-top: 6px;
+			margin-left: 20px;
+		}
+
+		.y-labels {
+			position: absolute;
+			left: 0;
+			top: 0;
+			height: 80px;
+			display: flex;
+			flex-direction: column;
+			justify-content: space-between;
+			font-size: 9px;
+			color: var(--text-muted);
+		}
+
+		svg#temp-chart-svg {
+			width: calc(100% - 20px);
+			height: 100%;
+			margin-left: 20px;
+			overflow: visible;
 		}
 
 		.zone-card {
-			border: 1px solid rgba(255, 255, 255, 0.08);
-			border-radius: 8px;
-			padding: 9px;
-			margin-bottom: 7px;
+			border: 1px solid var(--line-soft);
+			border-radius: 12px;
+			padding: 12px;
+			margin-bottom: 8px;
 			cursor: pointer;
-			transition: all 0.2s;
-			background: rgba(0, 0, 0, 0.18);
+			transition: all 0.22s ease;
+			background: rgba(255, 255, 255, 0.02);
 		}
 
 		.zone-card:hover {
-			border-color: rgba(0, 255, 204, 0.3);
-			background: rgba(0, 255, 204, 0.04);
+			border-color: rgba(77, 168, 218, 0.28);
+			background: rgba(77, 168, 218, 0.07);
 		}
 
-		.zone-card:last-child {
-			margin-bottom: 0;
+		.zone-card.active {
+			border-color: rgba(77, 168, 218, 0.5);
+			background: rgba(77, 168, 218, 0.10);
+			box-shadow: 0 0 0 1px rgba(77, 168, 218, 0.18), 0 12px 30px rgba(0, 0, 0, 0.28);
 		}
 
 		.zone-header {
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
-			margin-bottom: 5px;
+			margin-bottom: 8px;
 		}
 
 		.zone-name {
-			font-size: 11px;
+			font-size: 12px;
 			font-weight: 600;
 		}
 
-		.zone-badge {
-			font-size: 8px;
-			padding: 2px 6px;
-			border-radius: 4px;
-			font-weight: 700;
-			letter-spacing: 0.5px;
+		.zone-status-pill {
+			background: rgba(148, 175, 205, 0.14);
+			color: #d9ebfb;
+			padding: 3px 10px;
+			border-radius: 12px;
+			font-size: 10px;
+			font-weight: 500;
 		}
 
-		.zone-badge.kelp {
-			background: rgba(0, 255, 136, 0.12);
-			color: var(--green);
+		.zone-status-pill.warning {
+			background: rgba(222, 114, 55, 0.16);
+			color: #ffd4bc;
 		}
 
-		.zone-badge.heat {
-			background: rgba(255, 102, 0, 0.18);
-			color: var(--orange);
+		.zone-status-pill.danger {
+			background: rgba(255, 90, 95, 0.18);
+			color: #ffd0d2;
 		}
 
-		.zone-badge.urchin {
-			background: rgba(160, 44, 255, 0.18);
-			color: var(--purple);
-		}
-
-		.zone-badge.normal {
-			background: rgba(0, 136, 255, 0.12);
-			color: var(--blue);
-		}
-
-		.zone-stats {
+		.zone-row {
 			display: flex;
-			gap: 6px;
-			font-size: 9px;
-			color: rgba(255, 255, 255, 0.45);
-			margin-top: 3px;
-			flex-wrap: wrap;
-		}
-
-		.zone-stats b {
-			color: rgba(255, 255, 255, 0.8);
-			font-weight: 600;
-		}
-
-		.health-bar-wrap {
-			background: rgba(255, 255, 255, 0.06);
-			border-radius: 3px;
-			height: 3px;
+			justify-content: space-between;
+			color: var(--text-muted);
+			font-size: 11px;
 			margin-top: 6px;
 		}
 
-		.health-bar-fill {
-			height: 100%;
-			border-radius: 3px;
-			transition: width 0.5s;
+		.zone-row strong {
+			color: var(--text-main);
+			font-weight: 600;
 		}
 
 		.zone-desc {
-			font-size: 8.5px;
-			color: rgba(255, 255, 255, 0.35);
-			margin-top: 5px;
-			line-height: 1.4;
-		}
-
-		.dive-row {
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			font-size: 10.5px;
-			margin-bottom: 6px;
-			color: rgba(255, 255, 255, 0.65);
-		}
-
-		.dive-row:last-child {
-			margin-bottom: 0;
-		}
-
-		.tweet-item {
-			padding: 6px 0;
-			border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-			font-size: 9.5px;
-			color: rgba(255, 255, 255, 0.55);
+			margin-top: 8px;
+			font-size: 10px;
 			line-height: 1.45;
+			color: rgba(214, 227, 243, 0.56);
 		}
 
-		.tweet-item:last-child {
-			border-bottom: none;
+		.team-table {
+			width: 100%;
+			border-collapse: collapse;
+			margin-bottom: 16px;
+			color: var(--text-muted);
+			font-size: 12px;
 		}
 
-		#alert-panel {
-			border-color: rgba(255, 80, 0, 0.35) !important;
-			display: none;
+		.team-table th {
+			text-align: left;
+			font-weight: 500;
+			padding-bottom: 10px;
+			border-bottom: 1px solid var(--panel-border);
 		}
 
-		#alert-panel .panel-title {
-			color: var(--orange);
+		.team-table th:last-child,
+		.team-table td:last-child {
+			text-align: right;
 		}
 
-		#alert-text {
-			font-size: 11px;
-			line-height: 1.55;
-			color: rgba(255, 255, 255, 0.82);
+		.team-table td {
+			padding: 8px 0;
+			border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 		}
 
-		/* ── CANVAS ── */
-		#canvas-container {
-			flex: 1;
-			position: relative;
+		.owned-pill {
+			background: rgba(148, 175, 205, 0.14);
+			color: #d9ebfb;
+			padding: 2px 10px;
+			border-radius: 12px;
+			font-size: 10px;
+			display: inline-block;
+		}
+
+		.huge-percent {
+			font-size: 36px;
+			font-weight: 700;
+			color: var(--primary);
+			line-height: 1;
+			margin-bottom: 8px;
+		}
+
+		.percent-bar {
+			width: 100%;
+			height: 8px;
+			background: rgba(179, 201, 228, 0.12);
+			border-radius: 4px;
 			overflow: hidden;
 		}
 
-		/* ── ANNOTATIONS ── */
+		.percent-fill {
+			width: 90%;
+			height: 100%;
+			background: var(--primary);
+			border-radius: 4px;
+		}
+
+		.signal-row {
+			display: flex;
+			justify-content: space-between;
+			padding: 7px 0;
+			color: var(--text-muted);
+			font-size: 11px;
+		}
+
+		.signal-val {
+			color: var(--primary);
+			font-weight: 600;
+			text-align: right;
+		}
+
+		.live-pill {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			padding: 4px 10px;
+			border-radius: 999px;
+			font-size: 10px;
+			font-weight: 600;
+			border: 1px solid rgba(255, 255, 255, 0.08);
+		}
+
+		.live-pill.nominal {
+			color: var(--indicator-nominal);
+		}
+
+		.live-pill.anomaly {
+			color: var(--indicator-danger);
+		}
+
+		#controls-overlay {
+			position: absolute;
+			bottom: 10px;
+			left: 50%;
+			transform: translateX(-50%);
+			display: none;
+			gap: 8px;
+			justify-content: center;
+			width: 100%;
+			padding-bottom: 8px;
+			pointer-events: auto;
+		}
+
+		.ctrl-btn {
+			background: rgba(8, 17, 29, 0.52);
+			border: 1px solid var(--panel-border);
+			color: var(--text-muted);
+			padding: 8px 16px;
+			border-radius: 20px;
+			font-size: 11px;
+			cursor: pointer;
+			backdrop-filter: blur(8px);
+			transition: all 0.2s;
+		}
+
+		.ctrl-btn.active {
+			background: linear-gradient(180deg, #d9eaf7, #b7d9f0);
+			color: var(--ink-dark);
+			font-weight: 600;
+			box-shadow: 0 10px 20px rgba(77, 168, 218, 0.16);
+		}
+
+		#annotations {
+			position: absolute;
+			inset: 0;
+			pointer-events: none;
+		}
+
 		.zone-annotation {
 			position: absolute;
-			pointer-events: none;
 			transform: translate(-50%, -100%);
 			display: flex;
 			flex-direction: column;
 			align-items: center;
-			gap: 1px;
+			opacity: 0;
 			transition: opacity 0.3s;
 		}
 
 		.ann-bubble {
-			background: rgba(0, 12, 30, 0.92);
-			border: 1px solid;
-			border-radius: 7px;
-			padding: 5px 10px;
-			min-width: 105px;
+			background: rgba(10, 20, 32, 0.78);
+			border: 1px solid rgba(120, 161, 196, 0.28);
+			border-radius: 6px;
+			padding: 8px 12px;
+			backdrop-filter: blur(8px);
+			margin-bottom: 6px;
+			min-width: 112px;
 			text-align: center;
-			backdrop-filter: blur(10px);
 		}
 
 		.ann-name {
+			font-size: 11px;
+			font-weight: 600;
+			color: var(--text-main);
+			margin-bottom: 4px;
+		}
+
+		.ann-info {
 			font-size: 9px;
-			font-weight: 700;
-			letter-spacing: 0.5px;
-			margin-bottom: 2px;
+			color: rgba(214, 227, 243, 0.6);
 		}
 
-		.ann-health {
-			font-size: 8.5px;
-		}
-
-		.ann-line {
-			width: 1px;
-			height: 18px;
-			opacity: 0.45;
+		.ann-val {
+			font-weight: 500;
 		}
 
 		.ann-dot {
-			width: 7px;
-			height: 7px;
+			width: 6px;
+			height: 6px;
+			background: #c7e7fb;
 			border-radius: 50%;
+			box-shadow: 0 0 8px rgba(77, 168, 218, 0.85);
 		}
 
-		/* Controls bar */
-		#controls-overlay {
-			position: absolute;
-			bottom: 14px;
-			left: 50%;
-			transform: translateX(-50%);
-			display: flex;
-			gap: 5px;
-			background: rgba(0, 8, 22, 0.85);
-			border: 1px solid var(--border);
-			border-radius: 8px;
-			padding: 5px 9px;
-			backdrop-filter: blur(10px);
-			z-index: 10;
-		}
-
-		.mode-btn {
-			background: transparent;
-			color: rgba(255, 255, 255, 0.4);
-			border: 1px solid rgba(255, 255, 255, 0.12);
-			padding: 4px 11px;
-			border-radius: 5px;
-			font-size: 9.5px;
+		.map-marker {
+			width: 14px;
+			height: 14px;
+			background: #d4ecff;
+			border-radius: 50%;
 			cursor: pointer;
-			letter-spacing: 0.5px;
-			transition: all 0.2s;
+			box-shadow: 0 0 10px #4da8da, 0 0 20px #4da8da;
+			position: relative;
+			transition: transform 0.2s ease, opacity 0.2s ease;
+			overflow: visible;
 		}
 
-		.mode-btn.active {
-			background: rgba(0, 255, 204, 0.1);
-			color: var(--cyan);
-			border-color: rgba(0, 255, 204, 0.35);
-		}
-
-		.mode-btn:hover:not(.active) {
-			background: rgba(255, 255, 255, 0.05);
-			color: rgba(255, 255, 255, 0.7);
-		}
-
-		/* Alert banner */
-		#alert-banner {
+		.map-marker::after {
+			content: '';
 			position: absolute;
-			top: 12px;
-			left: 50%;
-			transform: translateX(-50%);
-			background: rgba(160, 0, 0, 0.88);
-			border: 1px solid var(--red);
-			border-radius: 8px;
-			padding: 9px 18px;
-			font-size: 11px;
+			top: -6px;
+			left: -6px;
+			right: -6px;
+			bottom: -6px;
+			border-radius: 50%;
+			border: 2px solid rgba(77, 168, 218, 0.5);
+			animation: pulse-ring 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+		}
+
+		@keyframes pulse-ring {
+			0% {
+				transform: scale(0.8);
+				opacity: 1;
+			}
+
+			100% {
+				transform: scale(2.5);
+				opacity: 0;
+			}
+		}
+
+		.map-marker.active {
+			background: #ffd3c1;
+			box-shadow: 0 0 10px #ff7c4d, 0 0 20px rgba(255, 124, 77, 0.95);
+		}
+
+		.maplibregl-marker {
+			overflow: visible !important;
+		}
+
+		.map-zone-label {
+			position: absolute;
+			transform: translate(-50%, 18px);
+			font-size: 10px;
 			font-weight: 600;
-			text-align: center;
-			max-width: 420px;
-			backdrop-filter: blur(10px);
+			color: #edf5ff;
+			background: rgba(8, 17, 29, 0.84);
+			border: 1px solid rgba(122, 150, 184, 0.22);
+			border-radius: 999px;
+			padding: 4px 10px;
+			backdrop-filter: blur(8px);
+			box-shadow: 0 10px 20px rgba(0, 0, 0, 0.28);
+			text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+			white-space: nowrap;
+			transition: opacity 0.2s ease, transform 0.2s ease;
+		}
+
+		#view-2d-map .maplibregl-canvas,
+		#view-2d-map .maplibregl-canvas-container,
+		#view-2d-map .maplibregl-map {
+			background: transparent !important;
+		}
+
+		.hidden-functional {
 			display: none;
-			z-index: 20;
-			line-height: 1.45;
+		}
+
+		@media (max-width: 1280px) {
+			#main {
+				padding: 0 14px 14px;
+				gap: 12px;
+			}
+
+			.sidebar {
+				width: 250px;
+			}
 		}
 	</style>
 </head>
 
 <body>
-	<!-- TOP BAR -->
-	<div id="topbar">
-		<div id="topbar-left">
-			<div class="logo-dot"></div>
-			<div>
-				<div class="title-main">AEGIS OCEAN</div>
-				<div class="title-sub">KELP CRISIS MONITOR — CALIFORNIA CURRENT · SIO BUOY</div>
-			</div>
-		</div>
-		<div id="topbar-center">
-			<div class="stat-pill">
-				<span class="stat-pill-label">TEMP</span>
-				<span class="stat-pill-value" id="top-temp">--</span>
-				<span class="stat-pill-label">°C</span>
-			</div>
-			<div class="stat-pill">
-				<span class="stat-pill-label">TURB</span>
-				<span class="stat-pill-value" id="top-turb">--</span>
-				<span class="stat-pill-label">m/s²</span>
-			</div>
-			<div class="stat-pill">
-				<span class="stat-pill-label">WAVE</span>
-				<span class="stat-pill-value" id="top-dist">--</span>
-				<span class="stat-pill-label">mm</span>
-			</div>
-			<span id="sim-badge-top" class="sim-badge">SIMULATED</span>
-			<div id="alert-badge" class="nominal">● NOMINAL</div>
-		</div>
-		<div id="topbar-right">
-			<div id="clock">--:--:--</div>
-			<button id="voice-btn" onclick="triggerVoiceAlert()">▶ VOICE ALERT</button>
-			<audio id="alert-audio"></audio>
+	<div id="canvas-container">
+		<div id="view-2d-map"></div>
+		<div id="map-zone-labels"></div>
+		<div id="dive-overlay"></div>
+		<div id="view-3d-underwater">
+			<div id="annotations"></div>
 		</div>
 	</div>
 
-	<!-- MAIN -->
-	<div id="main">
+	<div id="ui-layer">
+		<div id="topbar">
+			<div>
+				<div class="title-main">AEGIS OCEAN DASHBOARD <span class="title-v1">V1</span></div>
+				<div class="title-sub">SOUTHERN CALIFORNIA KELP RISK MONITOR</div>
+			</div>
 
-		<!-- LEFT SIDEBAR -->
-		<div class="sidebar" id="sidebar-left">
-			<div class="panel">
-				<div class="panel-title">Live Sentinel Feed</div>
-				<div class="sensor-row">
-					<div class="sensor-label">Temperature</div>
-					<div><span class="sensor-value" id="lv-temp">--</span><span class="sensor-unit">°C</span></div>
-				</div>
-				<div class="progress-bar-wrap">
-					<div class="progress-bar-fill" id="temp-bar"
-						style="width:40%;background:linear-gradient(90deg,#0066ff,#ff3300)"></div>
-				</div>
-				<div class="sensor-row" style="margin-top:9px">
-					<div class="sensor-label">Turbulence</div>
-					<div><span class="sensor-value" id="lv-turb">--</span><span class="sensor-unit"> m/s²</span></div>
-				</div>
-				<div class="progress-bar-wrap">
-					<div class="progress-bar-fill" id="turb-bar" style="width:5%;background:var(--cyan)"></div>
-				</div>
-				<div class="sensor-row" style="margin-top:9px">
-					<div class="sensor-label">Wave Height</div>
-					<div><span class="sensor-value" id="lv-dist" style="font-size:16px">--</span><span
-							class="sensor-unit"> mm</span></div>
-				</div>
-				<div style="margin-top:9px;display:flex;justify-content:space-between;align-items:center">
-					<div class="sensor-label">System</div>
-					<div class="status-pill nominal" id="status-pill">
-						<div class="status-dot"></div>NOMINAL
+			<div class="view-toggle-container">
+				<div class="view-pill-bg" id="pill-bg"></div>
+				<div class="view-pill active" id="pill-2d" onclick="switchView('2d')">2D Map</div>
+				<div class="view-pill" id="pill-3d" onclick="switchView('3d')">3D Underwater</div>
+			</div>
+
+		</div>
+
+		<div id="main">
+			<div class="sidebar">
+				<div class="panel">
+					<div class="panel-title">Live Sentinel Feed</div>
+					<div class="video-box">
+						<div class="feed-overlay">
+							<div>
+								<div class="feed-header">
+									<div class="feed-title" id="feed-zone">Awaiting zone lock</div>
+									<div class="feed-badge normal" id="feed-badge">Normal</div>
+								</div>
+								<div class="feed-subcopy" id="feed-subcopy">Waiting for a focused zone and anomaly telemetry.</div>
+							</div>
+							<div class="feed-meta">
+								<span id="feed-mode">2D surface review</span>
+								<span class="feed-meta-right">
+									<span id="feed-time">--</span>
+									<span class="feed-pulse" id="feed-pulse"></span>
+								</span>
+							</div>
+						</div>
 					</div>
 				</div>
-				<button class="calib-btn" onclick="calibrateSensors()">⊙ CALIBRATE (ZERO) SENSORS</button>
-			</div>
 
-			<div class="panel">
-				<div class="panel-title">
-					Sentinel Insight
-					<span id="sim-badge" class="sim-badge" style="margin-left:5px">SIM</span>
+				<div class="panel">
+					<div class="panel-title">Sentinel Insight</div>
+					<div class="big-temp" id="big-temp">--</div>
+					<div class="insight-caption" id="insight-caption">Waiting for live zone telemetry and baseline context.</div>
+					<div id="insight-rows"></div>
 				</div>
-				<div id="insight-text">Awaiting data stabilization...</div>
-			</div>
 
-			<div class="panel" id="alert-panel">
-				<div class="panel-title">⚠ Anomaly Alert</div>
-				<div id="alert-text"></div>
-			</div>
-
-			<div class="panel">
-				<div class="panel-title">Temperature History</div>
-				<svg id="temp-chart" viewBox="0 0 230 50" preserveAspectRatio="none">
-					<defs>
-						<linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-							<stop offset="0%" stop-color="#00ffcc" stop-opacity="0.28" />
-							<stop offset="100%" stop-color="#00ffcc" stop-opacity="0" />
-						</linearGradient>
-					</defs>
-					<line id="thresh-line" x1="0" y1="26" x2="230" y2="26" stroke="rgba(255,102,0,0.45)"
-						stroke-width="1" stroke-dasharray="4,3" />
-					<text id="thresh-label" x="3" y="22" fill="rgba(255,102,0,0.6)" font-size="7">18°C collapse
-						threshold</text>
-					<path id="chart-area" fill="url(#chartGrad)" />
-					<path id="chart-line" fill="none" stroke="#00ffcc" stroke-width="1.5" stroke-linejoin="round" />
-				</svg>
-			</div>
-		</div>
-
-		<!-- CENTER CANVAS -->
-		<div id="canvas-container">
-			<div id="alert-banner"></div>
-			<div id="annotations"></div>
-			<div id="controls-overlay">
-				<button class="mode-btn active" onclick="setMode(this,'heat')">Heat Map</button>
-				<button class="mode-btn" onclick="setMode(this,'kelp')">Kelp Health</button>
-				<button class="mode-btn" onclick="setMode(this,'urchin')">Urchin Density</button>
-				<button class="mode-btn" onclick="setMode(this,'salinity')">Salinity</button>
-			</div>
-		</div>
-
-		<!-- RIGHT SIDEBAR -->
-		<div class="sidebar" id="sidebar-right">
-			<div class="panel">
-				<div class="panel-title">Zone Status</div>
-				<div id="zone-list"></div>
-			</div>
-
-			<div class="panel" style="border-color:rgba(255,100,0,0.2)">
-				<div class="panel-title" style="color:var(--orange)">Dive Team Status</div>
-				<div class="dive-row"><span>Team Alpha</span><span style="color:var(--green)">● Standby</span></div>
-				<div class="dive-row"><span>Team Beta</span><span style="color:rgba(255,255,255,0.3)">● Off-shift</span>
+				<div class="panel">
+					<div class="panel-title">Temperature History</div>
+					<div id="temp-chart">
+						<div class="y-labels">
+							<span>24</span><span>22</span><span>20</span><span>18</span><span>16</span>
+						</div>
+						<svg id="temp-chart-svg" viewBox="0 0 230 60" preserveAspectRatio="none">
+							<defs>
+								<linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+									<stop offset="0%" stop-color="#4DA8DA" stop-opacity="0.3" />
+									<stop offset="100%" stop-color="#4DA8DA" stop-opacity="0" />
+								</linearGradient>
+							</defs>
+							<path id="chart-area" fill="url(#chartGrad)" />
+							<path id="chart-line" fill="none" stroke="#4DA8DA" stroke-width="2" stroke-linejoin="round" />
+						</svg>
+						<div class="chart-labels">
+							<span>09:00</span><span>10:30</span><span>12:00</span><span>13:30</span><span>14:50</span>
+						</div>
+					</div>
 				</div>
-				<div class="dive-row"><span>Scripps Unit</span><span style="color:#ffcc00">● In water</span></div>
 			</div>
 
-			<div class="panel" style="border-color:rgba(255,51,68,0.3);text-align:center;padding:14px 10px">
-				<div style="font-size:36px;font-weight:900;color:var(--red);line-height:1">90%</div>
-				<div style="font-size:9px;color:rgba(255,255,255,0.5);margin-top:5px;line-height:1.5">of California kelp
-					lost<br>in the last decade</div>
-				<div style="font-size:8px;color:rgba(255,51,68,0.6);margin-top:6px;font-weight:700;letter-spacing:1px">
-					WE ARE THE WARNING SYSTEM</div>
+			<div class="center-gap">
+				<div id="controls-overlay">
+					<button class="ctrl-btn active" onclick="setMode(this,'heat')">Heat Map</button>
+					<button class="ctrl-btn" onclick="setMode(this,'kelp')">Projected Kelp Health</button>
+					<button class="ctrl-btn" onclick="setMode(this,'urchin')">Urchin Density</button>
+					<button class="ctrl-btn" onclick="setMode(this,'salinity')">Salinity</button>
+				</div>
 			</div>
 
-			<div class="panel" style="flex:1">
-				<div class="panel-title" style="color:#1DA1F2">X Ocean Signals</div>
-				<div id="x-posts">
-					<div class="tweet-item">Loading ocean signals...</div>
+			<div class="sidebar">
+				<div class="panel">
+					<div class="panel-title">Zone Status</div>
+					<div class="top-zone-strip" id="top-zone-strip"></div>
+				</div>
+
+				<div class="panel" style="flex:1;">
+					<div class="panel-title">Ocean Signals</div>
+					<div class="signal-row"><span>Selected Zone</span><span class="signal-val" id="sig-zone">All zones</span></div>
+					<div class="signal-row"><span>Temperature</span><span class="signal-val" id="sig-temp">--</span></div>
+					<div class="signal-row"><span>Salinity</span><span class="signal-val" id="sig-sal">--</span></div>
+					<div class="signal-row"><span>Oxygen</span><span class="signal-val" id="sig-oxy">--</span></div>
+					<div class="signal-row"><span>Model Score</span><span class="signal-val" id="sig-score">--</span></div>
+					<div class="signal-row"><span>Alert Feed</span><span class="signal-val" id="sig-alert">Nominal</span></div>
+					<div class="signal-row" style="padding-top:14px; border-top:1px solid rgba(255,255,255,0.06); margin-top:10px;">
+						<span>Latest Insight</span>
+						<span class="signal-val" id="signal-summary" style="max-width:130px; line-height:1.4;">Awaiting update</span>
+					</div>
 				</div>
 			</div>
 		</div>
-
 	</div>
 
 	<script type="module">
 		import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js';
 
-		// ── SCENE ─────────────────────────────────────────────
-		const container = document.getElementById('canvas-container');
-		const W = () => container.clientWidth;
-		const H = () => container.clientHeight;
+		const API_BASE = window.location.port === '5000'
+			? window.location.origin
+			: 'http://127.0.0.1:5000';
+		const DashboardState = {
+			viewMode: '2d',
+			selectedZone: null,
+			isTransitioning: false,
+			currentMode: 'heat',
+			baseline: null,
+			zoneStates: {},
+			alert: null,
+			history: {
+				'del-mar': [],
+				'point-loma': [],
+				'south-bay': [],
+			},
+			liveLoopStarted: false,
+			lastLiveStamp: null,
+		};
 
-		const scene = new THREE.Scene();
-		scene.background = new THREE.Color(0x083d5c);
-		scene.fog = new THREE.FogExp2(0x0a4f6e, 0.085);
-
-		const camera = new THREE.PerspectiveCamera(52, W() / H(), 0.01, 50);
-		camera.position.set(0, 1.5, 2.9);
-		camera.lookAt(0, -0.15, 0);
-
-		const renderer = new THREE.WebGLRenderer({ antialias: true });
-		renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-		renderer.setSize(W(), H());
-		container.appendChild(renderer.domElement);
-
-		// ── ORBIT CONTROLS ─────────────────────────────────────
-		let drag = false, prevMouse = { x: 0, y: 0 };
-		let theta = 0.05, phi = 1.08, radius = 2.9;
-		let autoRotate = true;
-
-		renderer.domElement.addEventListener('mousedown', e => {
-			drag = true; autoRotate = false;
-			prevMouse = { x: e.clientX, y: e.clientY };
-		});
-		renderer.domElement.addEventListener('mouseup', () => { drag = false; });
-		renderer.domElement.addEventListener('mousemove', e => {
-			if (!drag) return;
-			theta -= (e.clientX - prevMouse.x) * 0.005;
-			phi -= (e.clientY - prevMouse.y) * 0.005;
-			phi = Math.max(0.28, Math.min(1.52, phi));
-			prevMouse = { x: e.clientX, y: e.clientY };
-		});
-		renderer.domElement.addEventListener('wheel', e => {
-			radius = Math.max(1.4, Math.min(5.5, radius + e.deltaY * 0.002));
-			e.preventDefault();
-		}, { passive: false });
-		renderer.domElement.addEventListener('touchstart', e => {
-			drag = true; autoRotate = false;
-			prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-		});
-		renderer.domElement.addEventListener('touchend', () => { drag = false; });
-		renderer.domElement.addEventListener('touchmove', e => {
-			if (!drag) return;
-			theta -= (e.touches[0].clientX - prevMouse.x) * 0.005;
-			phi -= (e.touches[0].clientY - prevMouse.y) * 0.005;
-			phi = Math.max(0.28, Math.min(1.52, phi));
-			prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-		});
-
-		// ── ZONES ─────────────────────────────────────────────
 		const ZONES = [
 			{
-				id: 'la-jolla', name: 'La Jolla Cove',
-				pos: new THREE.Vector3(-0.52, 0, -0.22),
-				type: 'kelp', health: 78, urchinDensity: 12, temp: 16.8, depth: '8–30m',
-				description: 'Healthy canopy · stable conditions',
-				color: '#00ff88', threeColor: new THREE.Color(0x00ff88),
-			},
-			{
-				id: 'point-loma', name: 'Point Loma',
-				pos: new THREE.Vector3(0.18, 0, 0.33),
-				type: 'heat', health: 23, urchinDensity: 67, temp: 21.4, depth: '5–25m',
-				description: '⚠ Thermal spike — urchins mobilizing',
-				color: '#ff6600', threeColor: new THREE.Color(0xff4400),
-			},
-			{
-				id: 'coronado', name: 'Coronado',
-				pos: new THREE.Vector3(0.48, 0, 0.02),
-				type: 'urchin', health: 15, urchinDensity: 94, temp: 19.2, depth: '3–18m',
-				description: '🚨 Critical barren — dive now',
-				color: '#cc44ff', threeColor: new THREE.Color(0xaa22ff),
-			},
-			{
-				id: 'del-mar', name: 'Del Mar',
+				id: 'del-mar',
+				name: 'Del Mar',
 				pos: new THREE.Vector3(-0.48, 0, 0.38),
-				type: 'normal', health: 65, urchinDensity: 28, temp: 17.1, depth: '10–35m',
-				description: 'Recovering · monitoring',
-				color: '#0088ff', threeColor: new THREE.Color(0x0088ff),
+				lngLat: [-117.27, 32.96],
+				color: '#4DA8DA',
+				depth: '10–35m',
+			},
+			{
+				id: 'point-loma',
+				name: 'Point Loma',
+				pos: new THREE.Vector3(0.18, 0, 0.33),
+				lngLat: [-117.24, 32.67],
+				color: '#DE7237',
+				depth: '5–25m',
+			},
+			{
+				id: 'south-bay',
+				name: 'South Bay',
+				pos: new THREE.Vector3(0.48, 0, 0.02),
+				lngLat: [-117.17, 32.58],
+				color: '#A855F7',
+				depth: '3–18m',
 			},
 		];
 
-		// ── OCEAN PARTICLE SHADER ──────────────────────────────
-		const oceanVert = `
-  attribute float aAnomaly;
-  attribute float aTemp;
-  attribute float aSal;
-  uniform float uTime;
-  uniform float uTemperature;
-  uniform int   uMode;
-  varying float vAnomaly;
-  varying float vTemp;
-  varying float vSal;
-  void main() {
-    vAnomaly = aAnomaly; vTemp = aTemp; vSal = aSal;
-    float wave = sin(position.x * 4.2 + uTime * 0.75) * 0.035
-               + sin(position.z * 5.1 + uTime * 1.05) * 0.028;
-    vec3 p = position + vec3(0.0, wave, 0.0);
-    vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    gl_PointSize = 3.2;
-    gl_Position  = projectionMatrix * mv;
-  }
-`;
-		const oceanFrag = `
-  varying float vAnomaly;
-  varying float vTemp;
-  varying float vSal;
-  uniform float uTime;
-  uniform float uTemperature;
-  uniform float uAlert;
-  uniform int   uMode;
-  vec3 heatColor(float t) {
-    t = clamp(t, 0.0, 1.0);
-    vec3 cold = vec3(0.0, 0.12, 0.55);
-    vec3 cool = vec3(0.0, 0.55, 0.7);
-    vec3 warm = vec3(0.95, 0.38, 0.0);
-    vec3 hot  = vec3(1.0, 0.05, 0.0);
-    if (t < 0.33) return mix(cold, cool, t * 3.0);
-    if (t < 0.66) return mix(cool, warm, (t - 0.33) * 3.0);
-    return mix(warm, hot, (t - 0.66) * 3.0);
-  }
-  vec3 salinityColor(float s) {
-    float t = clamp((s - 32.0) / 3.0, 0.0, 1.0);
-    return mix(vec3(0.0, 0.3, 0.8), vec3(0.8, 0.6, 0.0), t);
-  }
-  void main() {
-    vec2 uv = gl_PointCoord - 0.5;
-    if (dot(uv, uv) > 0.25) discard;
-    vec3 col;
-    float anomNorm = clamp(vAnomaly * 0.5 + 0.5 + (uTemperature - 0.5) * 0.4, 0.0, 1.0);
-    if (uMode == 0) {
-      col = heatColor(anomNorm);
-    } else if (uMode == 1) {
-      float stress = clamp((vTemp - 16.0) / 6.0, 0.0, 1.0);
-      col = mix(vec3(0.0, 0.6, 0.25), vec3(0.85, 0.25, 0.0), stress);
-    } else if (uMode == 2) {
-      float u = clamp(vAnomaly * 0.5 + 0.5, 0.0, 1.0);
-      col = mix(vec3(0.05, 0.05, 0.25), vec3(0.75, 0.1, 1.0), u);
-    } else {
-      col = salinityColor(vSal);
-    }
-    float pulse = uAlert > 0.5 ? abs(sin(uTime * 3.2)) * 0.35 : 0.0;
-    col = mix(col, vec3(1.0, 0.08, 0.0), pulse * clamp(vAnomaly, 0.0, 1.0));
-    float r = length(uv) * 2.0;
-    float a = (1.0 - r * r) * 0.088;
-    gl_FragColor = vec4(col, a);
-  }
-`;
+		const zoneById = Object.fromEntries(ZONES.map(zone => [zone.id, zone]));
 
-		// ── PHOTO-KELP SHADERS ─────────────────────────────────
-		const photoKelpVert = `
-  attribute float aH;
-  attribute float aPhase;
-  attribute float aType;
-  attribute float aStress;
-  uniform float uTime;
-  varying float vH;
-  varying float vType;
-  varying float vStress;
-  void main() {
-    vH = aH; vType = aType; vStress = aStress;
-    float sw1 = sin(uTime * 0.72 + position.x * 4.5 + aPhase) * aH * 0.11;
-    float sw2 = cos(uTime * 0.51 + position.z * 3.9 + aPhase * 1.4) * aH * 0.065;
-    float sw3 = sin(uTime * 1.28 + aPhase * 2.3) * aH * 0.028;
-    vec3 p = position + vec3(sw1 + sw3, 0.0, sw2);
-    vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    float sz = aType < 0.5
-      ? mix(12.0, 4.0, aH * aH) * (1.0 - aStress * 0.45)
-      : mix(8.0, 3.5, aH)       * (1.0 - aStress * 0.5);
-    gl_PointSize = sz;
-    gl_Position  = projectionMatrix * mv;
-  }
-`;
-		const photoKelpFrag = `
-  varying float vH;
-  varying float vType;
-  varying float vStress;
-  uniform float uTime;
-  void main() {
-    vec2 uv = gl_PointCoord - 0.5;
-    float shape;
-    if (vType < 0.5) {
-      if (dot(uv, uv) > 0.25) discard;
-      shape = length(uv) * 2.0;
-    } else {
-      vec2 lv = uv * vec2(1.7, 1.0);
-      if (dot(lv, lv) > 0.25) discard;
-      shape = length(lv) * 2.0;
-    }
-    vec3 base   = mix(vec3(0.36, 0.22, 0.00), vec3(0.78, 0.62, 0.00), vStress);
-    vec3 mid    = mix(vec3(0.48, 0.32, 0.01), vec3(0.88, 0.70, 0.04), vStress);
-    vec3 canopy = mix(vec3(0.60, 0.46, 0.03), vec3(0.94, 0.82, 0.08), vStress);
-    vec3 col;
-    if (vH < 0.35)      col = mix(base,   mid,    vH / 0.35);
-    else if (vH < 0.70) col = mix(mid,    canopy, (vH - 0.35) / 0.35);
-    else                col = canopy * (1.0 - (vH - 0.70) * 0.4);
-    col *= vType < 0.5 ? 1.0 : 0.82;
-    float shimmer = 0.80 + 0.20 * sin(uTime * 1.3 + vH * 9.0);
-    col *= shimmer;
-    float a = (1.0 - shape) * mix(0.88, 0.52, vStress) * mix(0.92, 0.58, vH * 0.5);
-    gl_FragColor = vec4(col, a);
-  }
-`;
+		function fmt(value, digits = 2, fallback = '--') {
+			const n = Number(value);
+			return Number.isFinite(n) ? n.toFixed(digits) : fallback;
+		}
 
-		// ── URCHIN SPINE SHADER ────────────────────────────────
-		const urchinPtVert = `
-  attribute float aPhase;
-  uniform float uTime;
-  varying float vGlow;
-  void main() {
-    vGlow = 0.65 + 0.35 * sin(uTime * 1.4 + aPhase * 5.0);
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = 6.0 + vGlow * 3.5;
-    gl_Position  = projectionMatrix * mv;
-  }
-`;
-		const urchinPtFrag = `
-  varying float vGlow;
-  void main() {
-    vec2 uv = gl_PointCoord - 0.5;
-    float d = length(uv);
-    if (d > 0.5) discard;
-    float spikes = 0.0;
-    for (int i = 0; i < 12; i++) {
-      float ang = float(i) * 3.14159 / 6.0;
-      vec2 dir = vec2(cos(ang), sin(ang));
-      spikes += max(0.0, 1.0 - abs(dot(uv, dir) * 5.5) - d * 3.0);
-    }
-    float body = smoothstep(0.32, 0.22, d);
-    float a = max(body, spikes * 0.6) * vGlow * 0.92;
-    vec3 col = mix(vec3(0.38, 0.02, 0.55), vec3(0.75, 0.15, 1.00), vGlow);
-    gl_FragColor = vec4(col, a);
-  }
-`;
+		function clamp(num, min, max) {
+			return Math.max(min, Math.min(max, num));
+		}
 
-		// ── PROCEDURAL FLOOR SHADERS ───────────────────────────
-		const floorVert = `
-  varying vec2 vUv;
-  varying vec3 vWorld;
-  void main() {
-    vUv = uv;
-    vec4 wp = modelMatrix * vec4(position, 1.0);
-    vWorld = wp.xyz;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-		const floorFrag = `
-  varying vec2 vUv;
-  varying vec3 vWorld;
-  uniform float uTime;
-  float h21(vec2 p) {
-    p = fract(p * vec2(127.1, 311.7));
-    p += dot(p, p + 17.5);
-    return fract(p.x * p.y);
-  }
-  float noise(vec2 p) {
-    vec2 i = floor(p); vec2 f = fract(p);
-    f = f*f*(3.0-2.0*f);
-    return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),
-               mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y);
-  }
-  float fbm(vec2 p) {
-    float v=0.0,a=0.5;
-    for(int i=0;i<5;i++){v+=a*noise(p);p*=2.13;a*=0.5;}
-    return v;
-  }
-  void main() {
-    vec2 wp = vWorld.xz;
-    vec3 col = vec3(0.11, 0.21, 0.15);
-    float sand = fbm(wp * 7.0);
-    col += vec3(0.04, 0.05, 0.03) * sand;
-    float ripple = sin(wp.x * 22.0 + fbm(wp * 3.0) * 4.0) * 0.04;
-    col += vec3(0.02, 0.03, 0.02) * (ripple + 0.04);
-    float rock = smoothstep(0.56, 0.74, fbm(wp * 2.2 + vec2(4.1, 7.3)));
-    col = mix(col, vec3(0.07, 0.11, 0.13), rock);
-    float algae = smoothstep(0.62, 0.80, fbm(wp * 3.8 + vec2(1.7, 9.1)));
-    col = mix(col, vec3(0.04, 0.17, 0.07), algae * 0.75);
-    float caus = noise(wp * 4.5 + uTime * 0.35) * noise(wp * 6.0 - uTime * 0.25);
-    col += vec3(0.0, 0.06, 0.09) * caus * caus * 2.5;
-    float dist = length(vWorld.xz);
-    col = mix(col, vec3(0.04, 0.22, 0.33), smoothstep(5.0, 14.0, dist));
-    gl_FragColor = vec4(col, 1.0);
-  }
-`;
-
-		// ── SUN RAY SHADERS ────────────────────────────────────
-		const sunRayVert = `
-  attribute float aAlpha;
-  attribute float aTiltX;
-  attribute float aTiltZ;
-  uniform float uTime;
-  varying float vT;
-  varying float vAlpha;
-  void main() {
-    vAlpha = aAlpha;
-    vT = clamp((position.y + 1.0) / 3.0, 0.0, 1.0);
-    float shimmer = sin(uTime * 1.1 + position.y * 3.0 + aAlpha * 8.0) * 0.008;
-    vec3 p = position + vec3(position.y * aTiltX + shimmer, 0.0, position.y * aTiltZ);
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-  }
-`;
-		const sunRayFrag = `
-  varying float vT;
-  varying float vAlpha;
-  uniform float uTime;
-  void main() {
-    float pulse = 0.72 + 0.28 * sin(uTime * 0.65 + vAlpha * 5.0);
-    vec3 col = mix(vec3(0.05, 0.45, 0.65), vec3(0.85, 1.00, 1.00), vT * vT);
-    float a  = vT * vT * 0.068 * pulse * vAlpha;
-    gl_FragColor = vec4(col, a);
-  }
-`;
-
-		// ── BUILD OCEAN SPLAT PARTICLES ────────────────────────
-		let oceanParticles = null;
-		let oceanMat = null;
-
-		function buildOceanFromData(data) {
-			const MAX = 6000;
-			const step = data.length > MAX ? Math.ceil(data.length / MAX) : 1;
-			const pts = data.filter((_, i) => i % step === 0);
-			const N = pts.length;
-			let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
-			for (const d of pts) {
-				if (d.x < xMin) xMin = d.x; if (d.x > xMax) xMax = d.x;
-				if (d.y < yMin) yMin = d.y; if (d.y > yMax) yMax = d.y;
+		function currentZoneId() {
+			if (DashboardState.selectedZone) return DashboardState.selectedZone;
+			const entries = Object.entries(DashboardState.zoneStates || {}).filter(([, state]) => state && Number.isFinite(Number(state.anomaly_score)));
+			if (entries.length) {
+				entries.sort((a, b) => Number(a[1].anomaly_score) - Number(b[1].anomaly_score));
+				return entries[0][0];
 			}
-			const xR = xMax - xMin || 1, yR = yMax - yMin || 1;
-			const xC = (xMin + xMax) / 2, yC = (yMin + yMax) / 2;
-			const sc = 1.4 / Math.max(xR, yR);
-			const pos = new Float32Array(N * 3), anom = new Float32Array(N), temps = new Float32Array(N), sals = new Float32Array(N);
-			for (let i = 0; i < N; i++) {
-				pos[i * 3] = (pts[i].x - xC) * sc; pos[i * 3 + 1] = (pts[i].z || 0) * 2.2; pos[i * 3 + 2] = (pts[i].y - yC) * sc;
-				anom[i] = pts[i].anomaly || 0; temps[i] = pts[i].temp || 17; sals[i] = pts[i].sal || 33;
-			}
-			const geo = new THREE.BufferGeometry();
-			geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-			geo.setAttribute('aAnomaly', new THREE.BufferAttribute(anom, 1));
-			geo.setAttribute('aTemp', new THREE.BufferAttribute(temps, 1));
-			geo.setAttribute('aSal', new THREE.BufferAttribute(sals, 1));
-			oceanMat = new THREE.ShaderMaterial({
-				vertexShader: oceanVert, fragmentShader: oceanFrag,
-				uniforms: { uTime: { value: 0 }, uTemperature: { value: 0.35 }, uAlert: { value: 0 }, uMode: { value: 0 } },
-				transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+			return ZONES[0].id;
+		}
+
+		function currentZoneState() {
+			return DashboardState.zoneStates[currentZoneId()] || null;
+		}
+
+		async function fetchFreshJson(url) {
+			const response = await fetch(`${url}${url.includes('?') ? '&' : '?'}_ts=${Date.now()}`, {
+				cache: 'no-store',
 			});
+			return response.json();
+		}
+
+		function zoneRiskSummary(zoneId, live) {
+			if (!live) {
+				return { health: 70, pressure: 25, status: 'Stable', statusClass: 'nominal', description: 'Awaiting live zone state.' };
+			}
+			const z = live.z_scores || {};
+			const tempRisk = Math.max(0, Number(z.temp || 0));
+			const oxygenStress = Math.max(0, -Number(z.oxygen || 0));
+			const fresheningStress = Math.max(0, -Number(z.salinity || 0));
+			const salinityDeviation = Math.abs(Number(z.salinity || 0));
+			const modelSeverity = Math.max(0, -Number(live.anomaly_score || 0));
+			const baseHealth = zoneId === 'del-mar' ? 80 : zoneId === 'point-loma' ? 56 : 48;
+			const basePressure = zoneId === 'del-mar' ? 18 : zoneId === 'point-loma' ? 44 : 58;
+
+			/*
+				Research-informed proxy logic:
+				- Heat anomalies reduce projected kelp condition and raise barren-transition risk.
+				- Low oxygen harms kelp condition but can suppress urchin grazing pressure.
+				- Freshening / low salinity suppresses urchin feeding and activity.
+				- The Isolation Forest score amplifies multi-stressor severity.
+			*/
+			const health = clamp(
+				baseHealth
+				- tempRisk * 18
+				- oxygenStress * 11
+				- salinityDeviation * 4
+				- modelSeverity * 22
+				- (live.is_anomaly ? 8 : 0),
+				0,
+				100
+			);
+
+			const pressure = clamp(
+				basePressure
+				+ tempRisk * 12
+				+ modelSeverity * 18
+				+ ((100 - health) / 100) * 16
+				- oxygenStress * 8
+				- fresheningStress * 7,
+				0,
+				100
+			);
+			let status = 'Stable';
+			let statusClass = 'nominal';
+			if (live.anomaly_label === 'CRITICAL' || live.anomaly_score < -0.45) {
+				status = 'Critical';
+				statusClass = 'danger';
+			} else if (live.anomaly_label === 'ALERT' || live.anomaly_score < -0.25) {
+				status = 'Warning';
+				statusClass = 'warning';
+			}
+			let description;
+			if (live.is_anomaly) {
+				description = `Heat and multi-stressor anomaly detected. Model score ${fmt(live.anomaly_score, 3)}; kelp risk rises with temp stress, while low oxygen/freshening can dampen urchin grazing pressure.`;
+			} else {
+				description = `Projected kelp-risk remains moderate. Temp z ${fmt(z.temp, 2)}, oxygen z ${fmt(z.oxygen, 2)}, salinity z ${fmt(z.salinity, 2)}.`;
+			}
+			return { health, pressure, status, statusClass, description };
+		}
+
+		let map;
+		let mapMarkers = {};
+		let mapZoneLabels = {};
+
+		function markerElementFor(zone) {
+			const el = document.createElement('div');
+			el.className = 'map-marker';
+			el.style.pointerEvents = 'auto';
+			el.style.zIndex = '40';
+			const openZoneDiveView = event => {
+				if (event) {
+					event.preventDefault();
+					event.stopPropagation();
+				}
+				selectZone(zone.id, { enter3d: true });
+			};
+			el.onclick = openZoneDiveView;
+			el.addEventListener('click', openZoneDiveView, { passive: false });
+			el.addEventListener('pointerup', openZoneDiveView, { passive: false });
+			el.addEventListener('mouseup', openZoneDiveView, { passive: false });
+			return el;
+		}
+
+		function buildZoneLabels() {
+			const container = document.getElementById('map-zone-labels');
+			if (!container) return;
+			container.innerHTML = '';
+			mapZoneLabels = {};
+			ZONES.forEach(zone => {
+				const label = document.createElement('div');
+				label.className = 'map-zone-label';
+				label.textContent = zone.name;
+				container.appendChild(label);
+				mapZoneLabels[zone.id] = label;
+			});
+			updateZoneLabels();
+		}
+
+		function updateZoneLabels() {
+			if (!map) return;
+			Object.entries(mapZoneLabels).forEach(([id, label]) => {
+				const zone = zoneById[id];
+				if (!zone) return;
+				const point = map.project(zone.lngLat);
+				label.style.left = `${point.x}px`;
+				label.style.top = `${point.y}px`;
+				label.style.opacity = DashboardState.selectedZone && DashboardState.selectedZone !== id ? '0.35' : '1';
+				label.style.transform = `translate(-50%, 18px) scale(${DashboardState.selectedZone === id ? 1.04 : 1})`;
+			});
+		}
+
+		function refreshMapMarkers() {
+			Object.entries(mapMarkers).forEach(([id, marker]) => {
+				const active = id === DashboardState.selectedZone;
+				const el = marker.getElement();
+				el.classList.toggle('active', active);
+				el.style.opacity = DashboardState.selectedZone && !active ? '0.35' : '1';
+				el.style.transform = active ? 'scale(1.14)' : 'scale(1)';
+			});
+			updateZoneLabels();
+		}
+
+		function flyMap(animated = true) {
+			if (!map) return;
+			const zone = DashboardState.selectedZone ? zoneById[DashboardState.selectedZone] : null;
+			const target = zone ? { center: zone.lngLat, zoom: 12.5 } : { center: [-117.22, 32.75], zoom: 9.9 };
+			if (animated) map.flyTo({ ...target, speed: 0.8 });
+			else map.jumpTo(target);
+		}
+
+		function updateViewTogglePill(mode = DashboardState.viewMode) {
+			const pill2d = document.getElementById('pill-2d');
+			const pill3d = document.getElementById('pill-3d');
+			const bg = document.getElementById('pill-bg');
+			if (!pill2d || !pill3d || !bg) return;
+			const target = mode === '3d' ? pill3d : pill2d;
+			bg.style.width = `${target.offsetWidth}px`;
+			bg.style.transform = `translateX(${target.offsetLeft - pill2d.offsetLeft}px)`;
+		}
+
+		function render2DMap() {
+			if (map) {
+				refreshMapMarkers();
+				return;
+			}
+
+			fetch('https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json')
+				.then(response => response.json())
+				.then(style => {
+					style.layers.forEach(layer => {
+						if (!layer.paint) layer.paint = {};
+						if (layer.id.toLowerCase().includes('water') || layer.id === 'background') {
+							if (layer.type === 'background') layer.paint['background-color'] = 'rgba(0,0,0,0)';
+							if (layer.type === 'fill') layer.paint['fill-color'] = 'rgba(0,0,0,0)';
+							if (layer.type === 'line') layer.paint['line-color'] = 'rgba(0,0,0,0)';
+						}
+						if ((layer.id.includes('land') || layer.id === 'landcover') && layer.type === 'fill') {
+							layer.paint['fill-color'] = '#111418';
+						}
+					});
+
+					map = new maplibregl.Map({
+						container: 'view-2d-map',
+						style,
+						center: [-117.22, 32.81],
+						zoom: 10.5,
+						pitch: 20,
+						interactive: true,
+						attributionControl: false,
+					});
+
+					map.on('load', () => {
+						ZONES.forEach(zone => {
+							mapMarkers[zone.id] = new maplibregl.Marker(markerElementFor(zone)).setLngLat(zone.lngLat).addTo(map);
+						});
+						buildZoneLabels();
+						refreshMapMarkers();
+						const bounds = ZONES.reduce((acc, zone) => acc.extend(zone.lngLat), new maplibregl.LngLatBounds(ZONES[0].lngLat, ZONES[0].lngLat));
+						map.fitBounds(bounds, {
+							padding: { top: 90, bottom: 90, left: 110, right: 330 },
+							duration: 0,
+							pitch: 20,
+							maxZoom: 10.2,
+						});
+					});
+
+					map.on('click', event => {
+						let nearestZone = null;
+						let nearestDistance = Infinity;
+						ZONES.forEach(zone => {
+							const projected = map.project(zone.lngLat);
+							const dx = projected.x - event.point.x;
+							const dy = projected.y - event.point.y;
+							const dist = Math.sqrt(dx * dx + dy * dy);
+							if (dist < nearestDistance) {
+								nearestDistance = dist;
+								nearestZone = zone;
+							}
+						});
+						if (nearestZone && nearestDistance <= 26) {
+							selectZone(nearestZone.id, { enter3d: true });
+						}
+					});
+
+					map.on('move', updateZoneLabels);
+					map.on('zoom', updateZoneLabels);
+					map.on('resize', updateZoneLabels);
+				})
+				.catch(error => console.error('Map load failed', error));
+		}
+
+		window.switchView = function switchView(mode) {
+			if (DashboardState.viewMode === mode || DashboardState.isTransitioning) return;
+			DashboardState.isTransitioning = true;
+			DashboardState.viewMode = mode;
+
+			document.getElementById('pill-2d').classList.toggle('active', mode === '2d');
+			document.getElementById('pill-3d').classList.toggle('active', mode === '3d');
+			updateViewTogglePill(mode);
+
+			const mapView = document.getElementById('view-2d-map');
+			const underwater = document.getElementById('view-3d-underwater');
+			const controls = document.getElementById('controls-overlay');
+			mapView.classList.toggle('hidden', mode === '3d');
+			underwater.classList.toggle('active', mode === '3d');
+			controls.style.display = mode === '3d' ? 'flex' : 'none';
+
+			const desktop = document.getElementById('status-desktop');
+			const desktopText = document.getElementById('status-desktop-text');
+			if (desktop && desktopText) {
+				desktop.style.background = mode === '3d' ? 'rgba(8, 17, 29, 0.62)' : 'rgba(8, 17, 29, 0.38)';
+				desktopText.textContent = mode === '3d' ? 'Dive Mode' : 'Web Desktop';
+			}
+
+			const overlay = document.getElementById('dive-overlay');
+			overlay.classList.add('diving');
+			setTimeout(() => {
+				overlay.classList.remove('diving');
+				DashboardState.isTransitioning = false;
+				if (mode === '2d' && map) {
+					map.resize();
+					flyMap(true);
+				}
+			}, 850);
+
+			updateFeedPanel();
+		};
+
+		function selectZone(zoneId, { enter3d = false } = {}) {
+			DashboardState.selectedZone = zoneId;
+			refreshMapMarkers();
+			renderZoneList();
+			renderTopZoneStrip();
+			updateInsightPanel();
+			updateSignalsPanel();
+			if (map) flyMap(true);
+			centerCameraOnZone(zoneId);
+			if (enter3d) {
+				if (DashboardState.viewMode !== '3d') {
+					window.switchView('3d');
+				}
+				requestAnimationFrame(() => {
+					if (DashboardState.viewMode !== '3d') {
+						window.switchView('3d');
+					}
+					updateFeedPanel();
+				});
+			}
+		}
+
+		window.selectZone = selectZone;
+
+		const container = document.getElementById('view-3d-underwater');
+		const annotationsEl = document.getElementById('annotations');
+		const scene = new THREE.Scene();
+		scene.fog = new THREE.FogExp2(0x050b14, 0.1);
+
+		const camera = new THREE.PerspectiveCamera(52, 1, 0.01, 50);
+		const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+		renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+		renderer.domElement.style.position = 'absolute';
+		renderer.domElement.style.inset = '0';
+		container.appendChild(renderer.domElement);
+
+		function resize3D() {
+			const width = container.clientWidth || window.innerWidth;
+			const height = container.clientHeight || window.innerHeight;
+			camera.aspect = width / height;
+			camera.updateProjectionMatrix();
+			renderer.setSize(width, height);
+		}
+
+		resize3D();
+		window.addEventListener('resize', () => {
+			resize3D();
+			if (map) map.resize();
+		});
+
+		let theta = 0.2;
+		let phi = 1.1;
+		let radius = 2.8;
+		let drag = false;
+		let prevMouse = { x: 0, y: 0 };
+		let focusTarget = new THREE.Vector3(0, -0.15, 0);
+
+		function centerCameraOnZone(zoneId) {
+			const zone = zoneById[zoneId];
+			if (!zone) {
+				focusTarget.set(0, -0.15, 0);
+				radius = 2.8;
+				return;
+			}
+			focusTarget.copy(zone.pos);
+			focusTarget.y = -0.15;
+			theta = Math.atan2(zone.pos.x, zone.pos.z || 0.0001);
+			radius = 2.1;
+		}
+
+		renderer.domElement.addEventListener('mousedown', event => {
+			drag = true;
+			prevMouse = { x: event.clientX, y: event.clientY };
+		});
+		window.addEventListener('mouseup', () => {
+			drag = false;
+		});
+		window.addEventListener('mousemove', event => {
+			if (!drag || DashboardState.viewMode !== '3d') return;
+			theta -= (event.clientX - prevMouse.x) * 0.005;
+			phi -= (event.clientY - prevMouse.y) * 0.005;
+			phi = clamp(phi, 0.45, 1.45);
+			prevMouse = { x: event.clientX, y: event.clientY };
+		});
+		renderer.domElement.addEventListener('wheel', event => {
+			if (DashboardState.viewMode !== '3d') return;
+			radius = clamp(radius + event.deltaY * 0.002, 1.4, 5.5);
+			event.preventDefault();
+		}, { passive: false });
+
+		const ambient = new THREE.AmbientLight(0x74c9ff, 0.75);
+		scene.add(ambient);
+		const hemi = new THREE.HemisphereLight(0xa8f1ff, 0x0b1320, 0.8);
+		scene.add(hemi);
+
+		const floor = new THREE.Mesh(
+			new THREE.CircleGeometry(7.5, 80),
+			new THREE.MeshBasicMaterial({ color: 0x091824, transparent: true, opacity: 0.88 })
+		);
+		floor.rotation.x = -Math.PI / 2;
+		floor.position.y = -1.0;
+		scene.add(floor);
+
+		const zoneMeshes = {};
+		const pingMeshes = [];
+
+		function addZoneMeshes(zone) {
+			const group = new THREE.Group();
+
+			const ring = new THREE.Mesh(
+				new THREE.RingGeometry(0.18, 0.195, 64),
+				new THREE.MeshBasicMaterial({
+					color: new THREE.Color(zone.color),
+					transparent: true,
+					opacity: 0.42,
+					side: THREE.DoubleSide,
+				})
+			);
+			ring.rotation.x = -Math.PI / 2;
+			ring.position.set(zone.pos.x, -0.985, zone.pos.z);
+			group.add(ring);
+
+			const core = new THREE.Mesh(
+				new THREE.CircleGeometry(0.024, 32),
+				new THREE.MeshBasicMaterial({
+					color: new THREE.Color(zone.color),
+					transparent: true,
+					opacity: 0.95,
+				})
+			);
+			core.rotation.x = -Math.PI / 2;
+			core.position.set(zone.pos.x, -0.98, zone.pos.z);
+			group.add(core);
+
+			const ping = new THREE.Mesh(
+				new THREE.RingGeometry(0.02, 0.04, 64),
+				new THREE.MeshBasicMaterial({
+					color: new THREE.Color(zone.color),
+					transparent: true,
+					opacity: 0.8,
+					side: THREE.DoubleSide,
+				})
+			);
+			ping.rotation.x = -Math.PI / 2;
+			ping.position.set(zone.pos.x, -0.985, zone.pos.z);
+			ping.userData.phase = Math.random() * Math.PI * 2;
+			group.add(ping);
+			pingMeshes.push(ping);
+
+			const stalk = new THREE.Mesh(
+				new THREE.CylinderGeometry(0.01, 0.01, 0.75, 8),
+				new THREE.MeshBasicMaterial({
+					color: new THREE.Color(zone.color),
+					transparent: true,
+					opacity: 0.55,
+				})
+			);
+			stalk.position.set(zone.pos.x, -0.63, zone.pos.z);
+			group.add(stalk);
+
+			scene.add(group);
+			zoneMeshes[zone.id] = { group, ring, core, ping, stalk };
+
+			const annotation = document.createElement('div');
+			annotation.className = 'zone-annotation';
+			annotation.id = `ann-${zone.id}`;
+			annotation.innerHTML = `
+				<div class="ann-bubble">
+					<div class="ann-name">${zone.name}</div>
+					<div class="ann-info">Average: <span class="ann-val">--</span></div>
+					<div class="ann-info">Projected Kelp Health: <span class="ann-val">--</span></div>
+				</div>
+				<div class="ann-dot"></div>
+			`;
+			annotationsEl.appendChild(annotation);
+		}
+
+		ZONES.forEach(addZoneMeshes);
+
+		let oceanParticles = null;
+		let oceanUniforms = null;
+
+		const oceanVert = `
+			attribute float aAnomaly;
+			attribute float aTemp;
+			attribute float aSal;
+			uniform float uTime;
+			varying float vAnomaly;
+			varying float vTemp;
+			varying float vSal;
+			void main() {
+				vAnomaly = aAnomaly;
+				vTemp = aTemp;
+				vSal = aSal;
+				vec3 p = position;
+				p.y += sin(position.x * 4.0 + uTime * 0.8) * 0.03;
+				p.y += cos(position.z * 5.0 + uTime * 1.1) * 0.02;
+				vec4 mv = modelViewMatrix * vec4(p, 1.0);
+				gl_PointSize = 6.2;
+				gl_Position = projectionMatrix * mv;
+			}
+		`;
+
+		const oceanFrag = `
+			uniform int uMode;
+			uniform float uAlert;
+			varying float vAnomaly;
+			varying float vTemp;
+			varying float vSal;
+			vec3 heatColor(float t) {
+				t = clamp(t, 0.0, 1.0);
+				vec3 cold = vec3(0.05, 0.18, 0.55);
+				vec3 cool = vec3(0.12, 0.48, 0.78);
+				vec3 warm = vec3(0.88, 0.47, 0.12);
+				vec3 hot = vec3(0.98, 0.24, 0.12);
+				if (t < 0.4) return mix(cold, cool, t / 0.4);
+				if (t < 0.75) return mix(cool, warm, (t - 0.4) / 0.35);
+				return mix(warm, hot, (t - 0.75) / 0.25);
+			}
+			void main() {
+				vec2 uv = gl_PointCoord - 0.5;
+				if (dot(uv, uv) > 0.25) discard;
+				float anomaly = clamp(vAnomaly * 0.5 + 0.5, 0.0, 1.0);
+				vec3 color;
+				if (uMode == 0) {
+					color = heatColor(anomaly);
+				} else if (uMode == 1) {
+					color = mix(vec3(0.10, 0.64, 0.42), vec3(0.95, 0.43, 0.15), anomaly);
+				} else if (uMode == 2) {
+					color = mix(vec3(0.18, 0.16, 0.44), vec3(0.74, 0.20, 0.98), anomaly);
+				} else {
+					float sal = clamp((vSal - 32.0) / 2.5, 0.0, 1.0);
+					color = mix(vec3(0.05, 0.3, 0.82), vec3(0.85, 0.68, 0.12), sal);
+				}
+				float pulse = uAlert > 0.5 ? 0.18 : 0.0;
+				gl_FragColor = vec4(color + pulse, 0.38);
+			}
+		`;
+
+		function buildOcean(data) {
+			const sample = data.length > 6500 ? data.filter((_, index) => index % Math.ceil(data.length / 6500) === 0) : data;
+			const positions = new Float32Array(sample.length * 3);
+			const anomaly = new Float32Array(sample.length);
+			const temp = new Float32Array(sample.length);
+			const sal = new Float32Array(sample.length);
+
+			let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+			sample.forEach(point => {
+				xMin = Math.min(xMin, point.x);
+				xMax = Math.max(xMax, point.x);
+				yMin = Math.min(yMin, point.y);
+				yMax = Math.max(yMax, point.y);
+			});
+			const xMid = (xMin + xMax) / 2;
+			const yMid = (yMin + yMax) / 2;
+			const scale = 1.45 / Math.max(xMax - xMin || 1, yMax - yMin || 1);
+
+			sample.forEach((point, index) => {
+				positions[index * 3] = (point.x - xMid) * scale;
+				positions[index * 3 + 1] = (point.z || 0) * 2.1;
+				positions[index * 3 + 2] = (point.y - yMid) * scale;
+				anomaly[index] = point.anomaly || 0;
+				temp[index] = point.temp || 17;
+				sal[index] = point.sal || 33;
+			});
+
+			const geometry = new THREE.BufferGeometry();
+			geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+			geometry.setAttribute('aAnomaly', new THREE.BufferAttribute(anomaly, 1));
+			geometry.setAttribute('aTemp', new THREE.BufferAttribute(temp, 1));
+			geometry.setAttribute('aSal', new THREE.BufferAttribute(sal, 1));
+
+			oceanUniforms = {
+				uTime: { value: 0 },
+				uMode: { value: 0 },
+				uAlert: { value: 0 },
+			};
+
+			const material = new THREE.ShaderMaterial({
+				vertexShader: oceanVert,
+				fragmentShader: oceanFrag,
+				uniforms: oceanUniforms,
+				transparent: true,
+				depthWrite: false,
+				blending: THREE.AdditiveBlending,
+			});
+
 			if (oceanParticles) scene.remove(oceanParticles);
-			oceanParticles = new THREE.Points(geo, oceanMat);
+			oceanParticles = new THREE.Points(geometry, material);
 			scene.add(oceanParticles);
 		}
-		(function buildDemoOcean() {
-			const demo = [];
-			for (let i = 0; i < 4000; i++) demo.push({
-				x: (Math.random() - 0.5) * 1.4, y: (Math.random() - 0.5) * 1.0,
-				z: -Math.random(), anomaly: (Math.random() - 0.5) * 2,
-				temp: 12 + Math.random() * 10, sal: 32.5 + Math.random() * 2
-			});
-			buildOceanFromData(demo);
-		})();
-		fetch('./splats.json').then(r => { if (!r.ok) throw 0; return r.json(); }).then(buildOceanFromData).catch(() => { });
 
-		// ── BUILD PHOTO-KELP ───────────────────────────────────
-		const ZONE_CFG = {
-			'la-jolla': { count: 72, radius: 0.26, heightMin: 1.45, heightMax: 1.90, stressLevel: 0.00, fronds: true, youngGrowth: false },
-			'del-mar': { count: 52, radius: 0.24, heightMin: 1.20, heightMax: 1.65, stressLevel: 0.15, fronds: true, youngGrowth: true },
-			'point-loma': { count: 14, radius: 0.22, heightMin: 0.65, heightMax: 1.05, stressLevel: 0.78, fronds: false, youngGrowth: false },
-			'coronado': { count: 6, radius: 0.19, heightMin: 0.35, heightMax: 0.62, stressLevel: 0.96, fronds: false, youngGrowth: false },
-		};
+		buildOcean(Array.from({ length: 3200 }, () => ({
+			x: (Math.random() - 0.5) * 1.5,
+			y: (Math.random() - 0.5) * 1.2,
+			z: -Math.random(),
+			anomaly: (Math.random() - 0.5) * 2,
+			temp: 12 + Math.random() * 10,
+			sal: 32.5 + Math.random() * 2,
+		})));
 
-		function buildPhotoKelp(zonePos, cfg) {
-			const STIPE_PTS = 48, FRONDS_PER = cfg.fronds ? 10 : 0, FROND_PTS = cfg.fronds ? 6 : 0;
-			const YOUNG = cfg.youngGrowth ? Math.floor(cfg.count * 0.35) : 0;
-			const total = cfg.count * (STIPE_PTS + FRONDS_PER * FROND_PTS) + YOUNG * Math.floor(STIPE_PTS * 0.4);
-			const positions = new Float32Array(total * 3), aH = new Float32Array(total),
-				aPhase = new Float32Array(total), aType = new Float32Array(total), aStress = new Float32Array(total);
-			let idx = 0;
-			const addKelp = (bx, bz, h, phase, stress, doFronds) => {
-				const ctrlPts = [];
-				for (let c = 0; c <= 6; c++) {
-					const t = c / 6, bend = Math.sin(t * Math.PI * 0.85) * (0.08 + Math.random() * 0.14), bDir = Math.random() * Math.PI * 2;
-					ctrlPts.push(new THREE.Vector3(bx + Math.cos(bDir) * bend, -1.0 + t * h, bz + Math.sin(bDir) * bend));
-				}
-				const curve = new THREE.CatmullRomCurve3(ctrlPts);
-				for (let p = 0; p < STIPE_PTS; p++) {
-					if (idx >= total) break;
-					const t = p / (STIPE_PTS - 1), pt = curve.getPointAt(t);
-					positions[idx * 3] = pt.x; positions[idx * 3 + 1] = pt.y; positions[idx * 3 + 2] = pt.z;
-					aH[idx] = t; aPhase[idx] = phase; aType[idx] = 0; aStress[idx] = stress; idx++;
-				}
-				if (doFronds) {
-					for (let f = 0; f < FRONDS_PER; f++) {
-						const ft = 0.18 + (f / FRONDS_PER) * 0.72, fBase = curve.getPointAt(ft);
-						const fDir = Math.random() * Math.PI * 2, fLen = 0.065 + Math.random() * 0.11;
-						for (let p = 0; p < FROND_PTS; p++) {
-							if (idx >= total) break;
-							const t2 = p / (FROND_PTS - 1);
-							positions[idx * 3] = fBase.x + Math.cos(fDir) * t2 * fLen;
-							positions[idx * 3 + 1] = fBase.y - t2 * t2 * 0.055;
-							positions[idx * 3 + 2] = fBase.z + Math.sin(fDir) * t2 * fLen;
-							aH[idx] = ft; aPhase[idx] = phase + f * 0.55; aType[idx] = 1; aStress[idx] = stress; idx++;
-						}
-					}
-				}
-			};
-			for (let s = 0; s < cfg.count; s++) {
-				const ang = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * cfg.radius;
-				addKelp(zonePos.x + Math.cos(ang) * r, zonePos.z + Math.sin(ang) * r,
-					cfg.heightMin + Math.random() * (cfg.heightMax - cfg.heightMin),
-					Math.random() * Math.PI * 2, cfg.stressLevel, cfg.fronds);
-			}
-			for (let s = 0; s < YOUNG; s++) {
-				const ang = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * cfg.radius * 1.2;
-				addKelp(zonePos.x + Math.cos(ang) * r, zonePos.z + Math.sin(ang) * r,
-					0.15 + Math.random() * 0.25, Math.random() * Math.PI * 2, 0.0, false);
-			}
-			const used = idx;
-			const geo = new THREE.BufferGeometry();
-			geo.setAttribute('position', new THREE.BufferAttribute(positions.slice(0, used * 3), 3));
-			geo.setAttribute('aH', new THREE.BufferAttribute(aH.slice(0, used), 1));
-			geo.setAttribute('aPhase', new THREE.BufferAttribute(aPhase.slice(0, used), 1));
-			geo.setAttribute('aType', new THREE.BufferAttribute(aType.slice(0, used), 1));
-			geo.setAttribute('aStress', new THREE.BufferAttribute(aStress.slice(0, used), 1));
-			const mat = new THREE.ShaderMaterial({
-				vertexShader: photoKelpVert, fragmentShader: photoKelpFrag,
-				uniforms: { uTime: { value: 0 } },
-				transparent: true, depthWrite: false, blending: THREE.NormalBlending,
-			});
-			return new THREE.Points(geo, mat);
-		}
+		fetch('./splats.json')
+			.then(response => response.ok ? response.json() : Promise.reject(new Error('splats.json unavailable')))
+			.then(buildOcean)
+			.catch(() => {});
 
-		// ── BUILD URCHIN CLUSTER ───────────────────────────────
-		function buildUrchinCluster(zonePos, count, radius) {
-			const pos = new Float32Array(count * 3), phase = new Float32Array(count);
-			for (let i = 0; i < count; i++) {
-				const ang = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * radius;
-				pos[i * 3] = zonePos.x + Math.cos(ang) * r; pos[i * 3 + 1] = -0.97 + Math.random() * 0.018; pos[i * 3 + 2] = zonePos.z + Math.sin(ang) * r;
-				phase[i] = Math.random() * Math.PI * 2;
-			}
-			const geo = new THREE.BufferGeometry();
-			geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-			geo.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
-			const mat = new THREE.ShaderMaterial({
-				vertexShader: urchinPtVert, fragmentShader: urchinPtFrag,
-				uniforms: { uTime: { value: 0 } },
-				transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-			});
-			return new THREE.Points(geo, mat);
-		}
-
-		// ── BUILD SUN RAYS ─────────────────────────────────────
-		function buildSunRays() {
-			const RAY = 22, allPos = [], allAlpha = [], allTX = [], allTZ = [];
-			for (let r = 0; r < RAY; r++) {
-				const cx = (Math.random() - 0.5) * 2.2, cz = (Math.random() - 0.5) * 2.2;
-				const w = 0.055 + Math.random() * 0.10;
-				const h0 = -1.0, h1 = h0 + 2.8 + Math.random() * 0.6;
-				const al = 0.35 + Math.random() * 0.65;
-				const tx = (Math.random() - 0.5) * 0.12, tz = (Math.random() - 0.5) * 0.08;
-				const verts = [[cx - w, h0, cz], [cx + w, h0, cz], [cx - w, h1, cz], [cx + w, h0, cz], [cx + w, h1, cz], [cx - w, h1, cz]];
-				for (const [x, y, z] of verts) { allPos.push(x, y, z); allAlpha.push(al); allTX.push(tx); allTZ.push(tz); }
-			}
-			const geo = new THREE.BufferGeometry();
-			geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(allPos), 3));
-			geo.setAttribute('aAlpha', new THREE.BufferAttribute(new Float32Array(allAlpha), 1));
-			geo.setAttribute('aTiltX', new THREE.BufferAttribute(new Float32Array(allTX), 1));
-			geo.setAttribute('aTiltZ', new THREE.BufferAttribute(new Float32Array(allTZ), 1));
-			const mat = new THREE.ShaderMaterial({
-				vertexShader: sunRayVert, fragmentShader: sunRayFrag,
-				uniforms: { uTime: { value: 0 } },
-				transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
-			});
-			window._sunRayMat = mat;
-			return new THREE.Mesh(geo, mat);
-		}
-
-		// ── PROCEDURAL FLOOR ───────────────────────────────────
-		const procFloor = new THREE.Mesh(
-			new THREE.PlaneGeometry(40, 40, 1, 1),
-			new THREE.ShaderMaterial({ vertexShader: floorVert, fragmentShader: floorFrag, uniforms: { uTime: { value: 0 } } })
-		);
-		procFloor.rotation.x = -Math.PI / 2;
-		procFloor.position.y = -1.005;
-		scene.add(procFloor);
-		window._floorMat = procFloor.material;
-		scene.add(buildSunRays());
-
-		// ── ZONE MESHES ────────────────────────────────────────
-		const zoneMeshes = {};
-		ZONES.forEach(zone => {
-			const meshes = [];
-			const kelpMesh = buildPhotoKelp(zone.pos, ZONE_CFG[zone.id]);
-			scene.add(kelpMesh); meshes.push(kelpMesh);
-			if (zone.id === 'point-loma') { const u = buildUrchinCluster(zone.pos, 65, 0.30); scene.add(u); meshes.push(u); }
-			if (zone.id === 'coronado') { const u = buildUrchinCluster(zone.pos, 160, 0.42); scene.add(u); meshes.push(u); }
-
-			// Inner disc
-			const disc = new THREE.Mesh(new THREE.CircleGeometry(0.022, 32),
-				new THREE.MeshBasicMaterial({ color: zone.threeColor, transparent: true, opacity: 0.95 }));
-			disc.rotation.x = -Math.PI / 2; disc.position.set(zone.pos.x, -0.99, zone.pos.z);
-			scene.add(disc); meshes.push(disc);
-
-			// Radius ring
-			const ring = new THREE.Mesh(new THREE.RingGeometry(0.20, 0.215, 64),
-				new THREE.MeshBasicMaterial({ color: zone.threeColor, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
-			ring.rotation.x = -Math.PI / 2; ring.position.set(zone.pos.x, -0.985, zone.pos.z);
-			ring._isRing = true; scene.add(ring); meshes.push(ring);
-
-			// Sonar ping
-			const pingMat = new THREE.MeshBasicMaterial({ color: zone.threeColor, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
-			const ping = new THREE.Mesh(new THREE.RingGeometry(0.001, 0.016, 64), pingMat);
-			ping.rotation.x = -Math.PI / 2; ping.position.set(zone.pos.x, -0.988, zone.pos.z);
-			ping._pingPhase = Math.random() * Math.PI * 2; ping._pingMat = pingMat; ping._pingSpeed = 0.72 + Math.random() * 0.18;
-			scene.add(ping); meshes.push(ping);
-			window._pingMeshes = window._pingMeshes || []; window._pingMeshes.push(ping);
-
-			zoneMeshes[zone.id] = meshes;
-		});
-
-		// Live buoy
-		const buoy = new THREE.Mesh(new THREE.SphereGeometry(0.017, 10, 10), new THREE.MeshBasicMaterial({ color: 0x00ffcc }));
-		buoy.position.set(-0.04, 0.04, 0.04); scene.add(buoy);
-
-		// ── HTML ANNOTATION LABELS ─────────────────────────────
-		const annotationsEl = document.getElementById('annotations');
-		ZONES.forEach(zone => {
-			const div = document.createElement('div');
-			div.className = 'zone-annotation'; div.id = `ann-${zone.id}`; div.style.color = zone.color;
-			div.innerHTML = `
-    <div class="ann-bubble" style="border-color:${zone.color}40">
-      <div class="ann-name" style="color:${zone.color}">${zone.name}</div>
-      <div class="ann-health" style="color:rgba(255,255,255,0.65)">Health: <b style="color:${zone.color}">${zone.health}%</b></div>
-    </div>
-    <div class="ann-line" style="background:${zone.color}"></div>
-    <div class="ann-dot" style="background:${zone.color};box-shadow:0 0 6px ${zone.color}"></div>
-  `;
-			annotationsEl.appendChild(div);
-		});
-
-		// ── ZONE CARDS ─────────────────────────────────────────
-		const zoneListEl = document.getElementById('zone-list');
-		ZONES.forEach(zone => {
-			const hc = zone.health > 60 ? '#00ff88' : zone.health > 30 ? '#ffcc00' : '#ff3344';
-			const labels = { kelp: '🌿 KELP', heat: '🔥 HEAT', urchin: '🦔 URCHIN', normal: '🌊 NORMAL' };
-			const card = document.createElement('div');
-			card.className = 'zone-card'; card.id = `card-${zone.id}`;
-			card.innerHTML = `
-    <div class="zone-header">
-      <div class="zone-name">${zone.name}</div>
-      <div class="zone-badge ${zone.type}">${labels[zone.type]}</div>
-    </div>
-    <div class="zone-stats">
-      <span>Health</span>&nbsp;<b style="color:${hc}">${zone.health}%</b>
-      &nbsp;·&nbsp;<span>Urchins</span>&nbsp;<b>${zone.urchinDensity}/m²</b>
-    </div>
-    <div class="zone-stats" style="margin-top:2px">
-      <span>Temp</span>&nbsp;<b>${zone.temp}°C</b>
-      &nbsp;·&nbsp;<span>Depth</span>&nbsp;<b>${zone.depth}</b>
-    </div>
-    <div class="health-bar-wrap">
-      <div class="health-bar-fill" style="width:${zone.health}%;background:linear-gradient(90deg,${hc}70,${hc})"></div>
-    </div>
-    <div class="zone-desc">${zone.description}</div>
-  `;
-			zoneListEl.appendChild(card);
-		});
-
-		// ── TEMP CHART ─────────────────────────────────────────
-		const tempHistory = Array.from({ length: 24 }, (_, i) => 14.5 + Math.sin(i * 0.55) * 1.8 + (Math.random() - 0.5) * 0.6);
-		function updateChart() {
-			const tMin = 10, tMax = 25, CW = 230, CH = 50;
-			const thresh = CH - ((18 - tMin) / (tMax - tMin)) * CH;
-			document.getElementById('thresh-line').setAttribute('y1', thresh);
-			document.getElementById('thresh-line').setAttribute('y2', thresh);
-			document.getElementById('thresh-label').setAttribute('y', thresh - 3);
-			const pts = tempHistory.map((t, i) => {
-				const x = (i / (tempHistory.length - 1)) * CW;
-				const y = CH - ((t - tMin) / (tMax - tMin)) * CH;
-				return `${x.toFixed(1)},${y.toFixed(1)}`;
-			});
-			document.getElementById('chart-line').setAttribute('d', `M ${pts.join(' L ')}`);
-			document.getElementById('chart-area').setAttribute('d', `M 0,${CH} L ${pts.join(' L ')} L ${CW},${CH} Z`);
-		}
-		updateChart();
-
-		// ── CLOCK ──────────────────────────────────────────────
-		setInterval(() => { document.getElementById('clock').textContent = new Date().toLocaleTimeString(); }, 1000);
-		document.getElementById('clock').textContent = new Date().toLocaleTimeString();
-
-		// ── MODE TOGGLE ────────────────────────────────────────
-		const modeMap = { heat: 0, kelp: 1, urchin: 2, salinity: 3 };
-		window.setMode = (btn, mode) => {
-			document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-			btn.classList.add('active');
-			if (oceanMat) oceanMat.uniforms.uMode.value = modeMap[mode] || 0;
-		};
-
-		// ── CALIBRATION ────────────────────────────────────────
-		let offsetTemp = 0, offsetDist = 0, offsetTurb = 0, lastRaw = { temp: 0, dist: 0, turb: 0 };
-		window.calibrateSensors = () => { offsetTemp = lastRaw.temp; offsetDist = lastRaw.dist; offsetTurb = lastRaw.turb; };
-
-		// ── TYPEWRITER ─────────────────────────────────────────
-		let twTimeout = null, twCurrent = '';
-		function typeWriter(text) {
-			if (text === twCurrent) return; twCurrent = text;
-			const el = document.getElementById('insight-text');
-			el.textContent = ''; if (twTimeout) clearTimeout(twTimeout);
-			let i = 0;
-			function type() { if (i < text.length) { el.textContent += text[i++]; twTimeout = setTimeout(type, 20); } }
-			type();
-		}
-
-		// ── VOICE ALERT ────────────────────────────────────────
-		let lastAlertText = '';
-		window.triggerVoiceAlert = () => {
-			const text = lastAlertText || 'Warning: Ocean temperature anomaly detected off the California coast. Dive teams prepare for urchin removal at Point Loma and Coronado.';
-			const audio = document.getElementById('alert-audio');
-			if (audio.src && !audio.src.endsWith(window.location.href)) { audio.play().catch(() => { }); }
-			else if ('speechSynthesis' in window) {
-				const utt = new SpeechSynthesisUtterance(text); utt.rate = 0.9; utt.pitch = 0.95;
-				speechSynthesis.cancel(); speechSynthesis.speak(utt);
-			}
-		};
-
-		// ── POLLING ────────────────────────────────────────────
-		async function pollLive() {
-			try {
-				const d = await fetch('http://localhost:5000/live').then(r => r.json());
-				lastRaw.temp = d.temp; lastRaw.dist = d.distance_mm; lastRaw.turb = d.turbulence;
-				const dTemp = (d.temp - offsetTemp).toFixed(1);
-				const dDist = (d.distance_mm - offsetDist).toFixed(0);
-				const dTurb = Math.max(0, d.turbulence - offsetTurb).toFixed(2);
-				document.getElementById('lv-temp').textContent = dTemp;
-				document.getElementById('lv-dist').textContent = dDist;
-				document.getElementById('lv-turb').textContent = dTurb;
-				document.getElementById('top-temp').textContent = dTemp;
-				document.getElementById('top-turb').textContent = dTurb;
-				document.getElementById('top-dist').textContent = dDist;
-				const tp = Math.max(0, Math.min(100, ((d.temp - 10) / 15) * 100));
-				const turp = Math.max(0, Math.min(100, (d.turbulence / 2) * 100));
-				document.getElementById('temp-bar').style.width = tp + '%';
-				document.getElementById('turb-bar').style.width = turp + '%';
-				document.getElementById('turb-bar').style.background = turp > 65 ? '#ff4444' : '#00ffcc';
-				const showSim = !!d.simulated;
-				document.getElementById('sim-badge').style.display = showSim ? 'inline-block' : 'none';
-				document.getElementById('sim-badge-top').style.display = showSim ? 'inline-block' : 'none';
-				if (oceanMat) {
-					oceanMat.uniforms.uTemperature.value = Math.max(0, Math.min(1, (d.temp - 10) / 15));
-					oceanMat.uniforms.uAlert.value = d.is_anomaly ? 1.0 : 0.0;
-				}
-				const statusPill = document.getElementById('status-pill');
-				const alertBadge = document.getElementById('alert-badge');
-				const alertBanner = document.getElementById('alert-banner');
-				const alertPanel = document.getElementById('alert-panel');
-				if (d.is_anomaly) {
-					statusPill.className = 'status-pill anomaly'; statusPill.innerHTML = '<div class="status-dot"></div>ANOMALY';
-					alertBadge.className = 'anomaly'; alertBadge.textContent = '⚠ ANOMALY';
-					const msg = d.gemini_summary || 'Anomaly detected in ocean sensor readings.';
-					lastAlertText = msg; alertBanner.textContent = msg; alertBanner.style.display = 'block';
-					alertPanel.style.display = 'block'; document.getElementById('alert-text').textContent = msg;
-					if (d.audio_url) { const audio = document.getElementById('alert-audio'); audio.src = d.audio_url; audio.play().catch(() => { }); }
-					scene.background = new THREE.Color(0x3a0000);
-					setTimeout(() => { if (scene) scene.background = new THREE.Color(0x083d5c); }, 600);
-				} else {
-					statusPill.className = 'status-pill nominal'; statusPill.innerHTML = '<div class="status-dot"></div>NOMINAL';
-					alertBadge.className = 'nominal'; alertBadge.textContent = '● NOMINAL';
-					alertBanner.style.display = 'none'; alertPanel.style.display = 'none';
-				}
-				if (d.scientific_insight) typeWriter(d.scientific_insight);
-				tempHistory.push(d.temp); if (tempHistory.length > 24) tempHistory.shift(); updateChart();
-			} catch (_) { }
-		}
-		setInterval(pollLive, 3000); pollLive();
-
-		async function pollX() {
-			try {
-				const posts = await fetch('http://localhost:5000/x-feed').then(r => r.json());
-				const el = document.getElementById('x-posts');
-				el.innerHTML = posts.length ? posts.slice(0, 5).map(p => `<div class="tweet-item">${p.text.substring(0, 105)}...</div>`).join('') : '<div class="tweet-item">No signals.</div>';
-			} catch (_) { document.getElementById('x-posts').innerHTML = '<div class="tweet-item">Bridge offline — social signals paused.</div>'; }
-		}
-		setInterval(pollX, 15000); pollX();
-
-		// ── RENDER LOOP ────────────────────────────────────────
-		const clock = new THREE.Clock();
 		function updateAnnotations() {
+			const width = container.clientWidth || window.innerWidth;
+			const height = container.clientHeight || window.innerHeight;
 			ZONES.forEach(zone => {
-				const p3 = zone.pos.clone(); p3.y += 0.04;
-				const proj = p3.project(camera);
-				const x = (proj.x * 0.5 + 0.5) * W();
-				const y = (-proj.y * 0.5 + 0.5) * H();
-				const el = document.getElementById(`ann-${zone.id}`);
-				if (proj.z < 1) { el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.opacity = '1'; }
-				else el.style.opacity = '0';
+				const annotation = document.getElementById(`ann-${zone.id}`);
+				const mesh = zoneMeshes[zone.id];
+				if (!annotation || !mesh) return;
+				const pos = zone.pos.clone();
+				pos.y += 0.32;
+				const projected = pos.project(camera);
+				const x = (projected.x * 0.5 + 0.5) * width;
+				const y = (-projected.y * 0.5 + 0.5) * height;
+				const visible = projected.z < 1;
+				annotation.style.opacity = visible ? (DashboardState.selectedZone && DashboardState.selectedZone !== zone.id ? '0.28' : '1') : '0';
+				annotation.style.left = `${x}px`;
+				annotation.style.top = `${y}px`;
 			});
 		}
 
-		renderer.setAnimationLoop(() => {
-			const t = clock.getElapsedTime();
-			if (autoRotate) theta += 0.0018;
-			camera.position.x = radius * Math.sin(phi) * Math.sin(theta);
+		function animate() {
+			requestAnimationFrame(animate);
+			const time = performance.now() * 0.001;
+			if (DashboardState.viewMode === '3d' && !drag) theta += 0.0016;
+
+			camera.position.x = focusTarget.x + radius * Math.sin(phi) * Math.sin(theta);
 			camera.position.y = radius * Math.cos(phi);
-			camera.position.z = radius * Math.sin(phi) * Math.cos(theta);
-			camera.lookAt(0, -0.2, 0);
+			camera.position.z = focusTarget.z + radius * Math.sin(phi) * Math.cos(theta);
+			camera.lookAt(focusTarget.x, focusTarget.y, focusTarget.z);
 
-			if (oceanMat) oceanMat.uniforms.uTime.value = t;
-			if (window._floorMat) window._floorMat.uniforms.uTime.value = t;
-			if (window._sunRayMat) window._sunRayMat.uniforms.uTime.value = t;
+			if (oceanUniforms) {
+				oceanUniforms.uTime.value = time;
+			}
 
-			ZONES.forEach((zone, i) => {
-				(zoneMeshes[zone.id] || []).forEach(m => {
-					if (m.material && m.material.uniforms && m.material.uniforms.uTime)
-						m.material.uniforms.uTime.value = t;
-					if (m._isRing) m.material.opacity = 0.38 + 0.22 * Math.sin(t * 1.4 + i * 1.1);
+			pingMeshes.forEach((mesh, index) => {
+				const phase = (time * 0.45 + mesh.userData.phase + index * 0.06) % 1;
+				const scale = 0.55 + phase * 5.4;
+				mesh.scale.setScalar(scale);
+				mesh.material.opacity = (1 - phase) * 0.45;
+			});
+
+			Object.entries(zoneMeshes).forEach(([zoneId, meshSet]) => {
+				const selected = !DashboardState.selectedZone || DashboardState.selectedZone === zoneId;
+				meshSet.group.visible = true;
+				meshSet.group.traverse(node => {
+					if (node.material) {
+						node.material.opacity = selected ? (node === meshSet.core ? 0.96 : 0.55) : 0.18;
+					}
+					node.scale.setScalar(selected ? 1 : 0.94);
 				});
 			});
 
-			(window._pingMeshes || []).forEach(ping => {
-				const p = ((t * ping._pingSpeed + ping._pingPhase) % (Math.PI * 2)) / (Math.PI * 2);
-				ping.scale.setScalar((0.025 + p * 0.28) / 0.016);
-				ping._pingMat.opacity = (1.0 - p) * 0.85;
-			});
-
-			buoy.scale.setScalar(1 + 0.4 * Math.sin(t * 4.2));
 			updateAnnotations();
 			renderer.render(scene, camera);
+		}
+
+		animate();
+
+		function setModeVisual(mode) {
+			DashboardState.currentMode = mode;
+			const modeIndex = { heat: 0, kelp: 1, urchin: 2, salinity: 3 }[mode] || 0;
+			if (oceanUniforms) {
+				oceanUniforms.uMode.value = modeIndex;
+			}
+		}
+
+		window.setMode = function setMode(button, mode) {
+			document.querySelectorAll('.ctrl-btn').forEach(btn => btn.classList.remove('active'));
+			button.classList.add('active');
+			setModeVisual(mode);
+			renderZoneList();
+			updateInsightPanel();
+		};
+
+		function renderZoneList() {
+			const zoneList = document.getElementById('zone-list');
+			if (!zoneList) return;
+			zoneList.innerHTML = '';
+			ZONES.forEach(zone => {
+				const live = DashboardState.zoneStates[zone.id];
+				const summary = zoneRiskSummary(zone.id, live);
+				const card = document.createElement('div');
+				card.className = `zone-card ${DashboardState.selectedZone === zone.id ? 'active' : ''}`;
+				card.innerHTML = `
+					<div class="zone-header">
+						<div class="zone-name">${zone.name}</div>
+						<div class="zone-status-pill ${summary.statusClass}">${summary.status}</div>
+					</div>
+					<div class="zone-row"><span>Temp</span><strong>${fmt(live?.temp_c, 1)}°C</strong></div>
+					<div class="zone-row"><span>Health</span><strong>${Math.round(summary.health)}%</strong></div>
+					<div class="zone-row"><span>Projected Urchin Pressure</span><strong>${Math.round(summary.pressure)}%</strong></div>
+					<div class="zone-row"><span>Depth</span><strong>${zone.depth}</strong></div>
+					<div class="zone-desc">${summary.description}</div>
+				`;
+				card.onclick = () => selectZone(zone.id, { enter3d: true });
+				zoneList.appendChild(card);
+			});
+		}
+
+		function renderTopZoneStrip() {
+			const strip = document.getElementById('top-zone-strip');
+			if (!strip) return;
+			strip.innerHTML = '';
+			ZONES.forEach(zone => {
+				const live = DashboardState.zoneStates[zone.id];
+				const summary = zoneRiskSummary(zone.id, live);
+				const chip = document.createElement('button');
+				chip.type = 'button';
+				chip.className = `top-zone-chip ${DashboardState.selectedZone === zone.id ? 'active' : ''}`;
+				chip.innerHTML = `
+					<span class="top-zone-dot" style="background:${zone.color}"></span>
+					<span>${zone.name}</span>
+					<span class="top-zone-status">${summary.status}</span>
+				`;
+				chip.onclick = () => selectZone(zone.id, { enter3d: true });
+				strip.appendChild(chip);
+			});
+		}
+
+		function renderInsightRows() {
+			const insightRows = document.getElementById('insight-rows');
+			insightRows.innerHTML = '';
+			ZONES.forEach(zone => {
+				const live = DashboardState.zoneStates[zone.id];
+				const temp = Number(live?.temp_c || 0);
+				const width = clamp(((temp - 10) / 12) * 100, 8, 100);
+				const row = document.createElement('div');
+				row.className = 'insight-row';
+				row.innerHTML = `
+					<span>${zone.name}</span>
+					<div class="bar-wrap"><div class="bar-fill" style="width:${width}%; background:${zone.color};"></div></div>
+					<span class="val">${fmt(live?.temp_c, 1)}°C</span>
+				`;
+				insightRows.appendChild(row);
+			});
+		}
+
+		function updateInsightPanel() {
+			const zone = zoneById[currentZoneId()];
+			const live = currentZoneState();
+			const summary = zoneRiskSummary(zone.id, live);
+			const z = live?.z_scores || {};
+			document.getElementById('big-temp').textContent = `${fmt(live?.temp_c, 1)}°C`;
+			document.getElementById('insight-caption').textContent = live
+				? `${zone.name} is in focus. Temp z ${fmt(z.temp, 2)}, salinity z ${fmt(z.salinity, 2)}, oxygen z ${fmt(z.oxygen, 2)}. ${summary.description}`
+				: 'Waiting for live zone telemetry and baseline context.';
+			renderInsightRows();
+
+			const ann = document.getElementById(`ann-${zone.id}`);
+			if (ann) {
+				const lines = ann.querySelectorAll('.ann-val');
+				if (lines.length >= 2) {
+					lines[0].textContent = `${fmt(live?.temp_c, 1)}°C`;
+					lines[1].textContent = `${Math.round(summary.health)}%`;
+					lines[1].style.color = zone.color;
+				}
+			}
+		}
+
+		const tempHistory = [];
+
+		function updateChart(tempValue) {
+			if (Number.isFinite(tempValue)) {
+				tempHistory.push(tempValue);
+				if (tempHistory.length > 36) tempHistory.shift();
+			}
+			const values = tempHistory.length ? tempHistory : [16, 16.8, 17.3, 17, 16.4, 16.9];
+			const tMin = 14;
+			const tMax = 24;
+			const width = 230;
+			const height = 60;
+			const points = values.map((temp, index) => {
+				const x = (index / Math.max(values.length - 1, 1)) * width;
+				const y = height - ((temp - tMin) / (tMax - tMin)) * height;
+				return `${x.toFixed(1)},${y.toFixed(1)}`;
+			});
+			document.getElementById('chart-line').setAttribute('d', `M ${points.join(' L ')}`);
+			document.getElementById('chart-area').setAttribute('d', `M 0,${height} L ${points.join(' L ')} L ${width},${height} Z`);
+		}
+
+		function updateSignalsPanel() {
+			const zone = zoneById[currentZoneId()];
+			const live = currentZoneState();
+			const summary = zone ? zoneRiskSummary(zone.id, live) : null;
+			document.getElementById('sig-zone').textContent = zone ? zone.name : 'All zones';
+			document.getElementById('sig-temp').textContent = `${fmt(live?.temp_c, 1)}°C`;
+			document.getElementById('sig-sal').textContent = `${fmt(live?.salinity, 2)} PSU`;
+			document.getElementById('sig-oxy').textContent = `${fmt(live?.dissolved_oxygen, 2)} mL/L`;
+			document.getElementById('sig-score').textContent = fmt(live?.anomaly_score, 3);
+			document.getElementById('sig-alert').textContent = live?.anomaly_label || 'Nominal';
+			document.getElementById('signal-summary').textContent =
+				DashboardState.alert?.narrative
+				|| (summary
+					? `Proxy model: heat lowers kelp health; hypoxia and freshening suppress projected urchin pressure.`
+					: 'Historical replay driving real-time risk scoring.');
+		}
+
+		function updateFeedPanel() {
+			const zone = zoneById[currentZoneId()];
+			const live = currentZoneState();
+			const badge = document.getElementById('feed-badge');
+			const subcopy = document.getElementById('feed-subcopy');
+			const pulse = document.getElementById('feed-pulse');
+			document.getElementById('feed-zone').textContent = zone ? zone.name : 'Awaiting zone lock';
+			document.getElementById('feed-mode').textContent = DashboardState.viewMode === '3d' ? 'Zone replay anomaly sweep' : 'Zone replay stream';
+			document.getElementById('feed-time').textContent = live?.timestamp || '--';
+			if (pulse && live?.timestamp) {
+				const changed = DashboardState.lastLiveStamp !== live.timestamp;
+				if (changed) {
+					DashboardState.lastLiveStamp = live.timestamp;
+					pulse.classList.add('active');
+					window.setTimeout(() => pulse.classList.remove('active'), 260);
+				}
+			}
+			const label = live?.anomaly_label || 'NORMAL';
+			if (badge) {
+				const badgeClass = label === 'NORMAL' ? 'normal' : label === 'WATCH' ? 'watch' : 'alert';
+				badge.className = `feed-badge ${badgeClass}`;
+				badge.textContent = label;
+			}
+			if (subcopy) {
+				const z = live?.z_scores || {};
+				subcopy.textContent = live
+					? live.is_anomaly
+						? `Detected stress pulse. Score ${fmt(live.anomaly_score, 3)} with temp z ${fmt(z.temp, 2)} and oxygen z ${fmt(z.oxygen, 2)}.`
+						: `Monitoring baseline drift. Score ${fmt(live.anomaly_score, 3)} with temp z ${fmt(z.temp, 2)} and salinity z ${fmt(z.salinity, 2)}.`
+					: 'Waiting for a focused zone and anomaly telemetry.';
+			}
+			const box = document.querySelector('.video-box');
+			if (box) {
+				box.style.background = DashboardState.viewMode === '3d'
+					? 'linear-gradient(180deg, #0d2130 0%, #07131d 100%)'
+					: 'linear-gradient(180deg, #132433 0%, #0b1622 100%)';
+				box.style.boxShadow = live?.is_anomaly
+					? 'inset 0 0 0 1px rgba(255,124,77,0.28), 0 0 32px rgba(255,90,95,0.12)'
+					: 'none';
+			}
+		}
+
+		async function refreshBaseline() {
+			try {
+				DashboardState.baseline = await fetchFreshJson(`${API_BASE}/baseline`);
+			} catch (_) {}
+		}
+
+		async function refreshAlert() {
+			try {
+				DashboardState.alert = await fetchFreshJson(`${API_BASE}/alert/latest`);
+			} catch (_) {
+				DashboardState.alert = null;
+			}
+		}
+
+		async function refreshHealth() {
+			try {
+				const health = await fetchFreshJson(`${API_BASE}/health`);
+				const latest = currentZoneState();
+				const anomaly = !!latest?.is_anomaly;
+				if (oceanUniforms) {
+					oceanUniforms.uAlert.value = anomaly ? 1 : 0;
+				}
+				if (!health.ok) {
+					document.getElementById('signal-summary').textContent = 'Bridge health degraded.';
+				}
+			} catch (_) {}
+		}
+
+		async function refreshLive() {
+			try {
+				const zoneStates = await fetchFreshJson(`${API_BASE}/zones/live`);
+				DashboardState.zoneStates = zoneStates || {};
+				if (!DashboardState.selectedZone) {
+					const entries = Object.entries(DashboardState.zoneStates).filter(([, state]) => state && Number.isFinite(Number(state.anomaly_score)));
+					if (entries.length) {
+						entries.sort((a, b) => Number(a[1].anomaly_score) - Number(b[1].anomaly_score));
+						DashboardState.selectedZone = entries[0][0];
+					}
+				}
+				const live = currentZoneState();
+				if (live?.temp_c) updateChart(Number(live.temp_c));
+				renderZoneList();
+				renderTopZoneStrip();
+				updateInsightPanel();
+				updateSignalsPanel();
+				updateFeedPanel();
+			} catch (error) {
+				document.getElementById('insight-caption').textContent = `Live feed unavailable at ${API_BASE}/zones/live`;
+				console.error(error);
+			}
+		}
+
+		async function runLiveLoop() {
+			if (DashboardState.liveLoopStarted) return;
+			DashboardState.liveLoopStarted = true;
+
+			const loop = async () => {
+				await refreshLive();
+				window.setTimeout(loop, 1500);
+			};
+
+			await loop();
+		}
+
+		window.addEventListener('error', event => {
+			const el = document.getElementById('insight-caption');
+			if (el) el.textContent = `Frontend error: ${event.message}`;
 		});
 
-		// ── RESIZE ─────────────────────────────────────────────
-		window.addEventListener('resize', () => {
-			camera.aspect = W() / H();
-			camera.updateProjectionMatrix();
-			renderer.setSize(W(), H());
+		window.addEventListener('unhandledrejection', event => {
+			const reason = event.reason?.message || String(event.reason || 'Unknown promise rejection');
+			const el = document.getElementById('insight-caption');
+			if (el) el.textContent = `Frontend promise error: ${reason}`;
 		});
+
+		render2DMap();
+		renderZoneList();
+		renderTopZoneStrip();
+		updateInsightPanel();
+		updateSignalsPanel();
+		updateFeedPanel();
+		updateChart();
+		requestAnimationFrame(() => updateViewTogglePill('2d'));
+
+		refreshBaseline();
+		refreshAlert().then(updateSignalsPanel);
+		runLiveLoop();
+		refreshHealth();
+
+		setInterval(() => refreshAlert().then(updateSignalsPanel), 5000);
+		setInterval(refreshHealth, 12000);
+		setInterval(refreshBaseline, 15000);
+		document.addEventListener('visibilitychange', () => {
+			if (!document.hidden) refreshLive();
+		});
+		window.addEventListener('resize', () => requestAnimationFrame(() => updateViewTogglePill()));
 	</script>
 </body>
 

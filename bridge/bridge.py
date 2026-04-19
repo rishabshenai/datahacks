@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -20,10 +20,29 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
+FRONTEND_ROOT = ROOT / "frontend"
 load_dotenv(ROOT / ".env")
 
 app = Flask(__name__)
-CORS(app)
+CORS(
+    app,
+    resources={r"/*": {"origins": ["http://127.0.0.1:8000", "http://localhost:8000"]}},
+    supports_credentials=False,
+)
+
+
+@app.after_request
+def add_cors_headers(response):
+    origin = request.headers.get("Origin")
+    allowed = {"http://127.0.0.1:8000", "http://localhost:8000"}
+    if origin in allowed:
+        response.headers["Access-Control-Allow-Origin"] = origin
+    else:
+        response.headers["Access-Control-Allow-Origin"] = "http://127.0.0.1:8000"
+    response.headers["Vary"] = "Origin"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    return response
 
 
 def env(name: str, default=None):
@@ -48,12 +67,18 @@ S3_KEYS = {
     "baselines": "baselines.json",
     "mooring_replay": "mooring_replay.csv",
     "model": "models/isolation_forest.pkl",
+    "zone_baselines": "zone_baselines.json",
+    "zone_replays": "zone_replays.json",
+    "zone_models": "models/zone_models.pkl",
 }
 
 LOCAL_FALLBACKS = {
     "baselines": ROOT / "data" / "baselines.json",
     "mooring_replay": ROOT / "data" / "mooring_replay.csv",
     "model": ROOT / "data" / "isolation_forest.pkl",
+    "zone_baselines": ROOT / "data" / "zone_baselines.json",
+    "zone_replays": ROOT / "data" / "zone_replays.json",
+    "zone_models": ROOT / "data" / "zone_models.pkl",
 }
 
 state_lock = threading.Lock()
@@ -69,6 +94,8 @@ latest_live = {
     "is_anomaly": False,
     "z_scores": {"temp": 0.0, "salinity": 0.0, "oxygen": 0.0},
     "source": "mock",
+    "zone": None,
+    "zone_key": None,
 }
 latest_alert = {
     "active": False,
@@ -77,19 +104,30 @@ latest_alert = {
     "narrative": "",
     "urgency": "LOW",
     "threat": "",
+    "zone": None,
+    "zone_key": None,
 }
 status = {
     "last_error": "",
     "baselines_source": "uninitialized",
     "replay_source": "uninitialized",
     "model_source": "uninitialized",
+    "zone_baselines_source": "uninitialized",
+    "zone_replays_source": "uninitialized",
+    "zone_models_source": "uninitialized",
     "replay_rows": 0,
     "replay_running": False,
+    "zone_count": 0,
+    "zone_mode_active": False,
 }
 
 baselines_by_month: dict[int, dict] = {}
 replay_df = pd.DataFrame()
 model = None
+zone_baselines_by_name: dict[str, dict[int, dict]] = {}
+zone_replays_by_name: dict[str, pd.DataFrame] = {}
+zone_models: dict[str, object] = {}
+latest_zones: dict[str, dict] = {}
 
 
 class MockIsolationForest:
@@ -111,6 +149,7 @@ def init_db():
             """
             CREATE TABLE IF NOT EXISTS readings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                zone TEXT,
                 timestamp TEXT NOT NULL,
                 temp_c REAL,
                 salinity REAL,
@@ -130,6 +169,7 @@ def init_db():
             """
             CREATE TABLE IF NOT EXISTS alerts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                zone TEXT,
                 timestamp TEXT NOT NULL,
                 station_lat REAL,
                 station_lon REAL,
@@ -140,6 +180,12 @@ def init_db():
             )
             """
         )
+        reading_columns = {row[1] for row in conn.execute("PRAGMA table_info(readings)").fetchall()}
+        if "zone" not in reading_columns:
+            conn.execute("ALTER TABLE readings ADD COLUMN zone TEXT")
+        alert_columns = {row[1] for row in conn.execute("PRAGMA table_info(alerts)").fetchall()}
+        if "zone" not in alert_columns:
+            conn.execute("ALTER TABLE alerts ADD COLUMN zone TEXT")
         conn.commit()
 
 
@@ -221,6 +267,29 @@ def fallback_model():
     return MockIsolationForest(), "mock"
 
 
+def fallback_zone_baselines():
+    path = LOCAL_FALLBACKS["zone_baselines"]
+    if path.exists():
+        with open(path) as f:
+            return json.load(f), f"local:{path.name}"
+    return {}, "unavailable"
+
+
+def fallback_zone_replays():
+    path = LOCAL_FALLBACKS["zone_replays"]
+    if path.exists():
+        with open(path) as f:
+            return json.load(f), f"local:{path.name}"
+    return {}, "unavailable"
+
+
+def fallback_zone_models():
+    path = LOCAL_FALLBACKS["zone_models"]
+    if path.exists():
+        return joblib.load(path), f"local:{path.name}"
+    return {}, "unavailable"
+
+
 def normalize_baselines(raw):
     if isinstance(raw, dict):
         normalized = []
@@ -247,8 +316,29 @@ def normalize_baselines(raw):
     return by_month
 
 
+def normalize_zone_baselines(raw):
+    return {zone_name: normalize_baselines(rows) for zone_name, rows in (raw or {}).items()}
+
+
+def normalize_zone_replays(raw):
+    normalized = {}
+    for zone_name, rows in (raw or {}).items():
+        df = pd.DataFrame(rows)
+        if df.empty:
+            continue
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df.sort_values("timestamp", inplace=True)
+        df.reset_index(drop=True, inplace=True)
+        normalized[zone_name] = df
+    return normalized
+
+
+def zone_mode_available():
+    return bool(zone_baselines_by_name and zone_replays_by_name and zone_models)
+
+
 def load_resources():
-    global baselines_by_month, replay_df, model
+    global baselines_by_month, replay_df, model, zone_baselines_by_name, zone_replays_by_name, zone_models
 
     try:
         baselines_raw = load_json_from_s3(S3_KEYS["baselines"])
@@ -281,17 +371,51 @@ def load_resources():
     replay_df.reset_index(drop=True, inplace=True)
     status["replay_rows"] = len(replay_df)
 
+    try:
+        zone_baselines_raw = load_json_from_s3(S3_KEYS["zone_baselines"])
+        zone_baselines_by_name = normalize_zone_baselines(zone_baselines_raw)
+        status["zone_baselines_source"] = "s3"
+    except Exception as exc:
+        zone_baselines_raw, source = fallback_zone_baselines()
+        zone_baselines_by_name = normalize_zone_baselines(zone_baselines_raw)
+        status["zone_baselines_source"] = source
+        if source == "unavailable":
+            status["last_error"] = f"Zone baselines load failed: {exc}"
+
+    try:
+        zone_replays_raw = load_json_from_s3(S3_KEYS["zone_replays"])
+        zone_replays_by_name = normalize_zone_replays(zone_replays_raw)
+        status["zone_replays_source"] = "s3"
+    except Exception as exc:
+        zone_replays_raw, source = fallback_zone_replays()
+        zone_replays_by_name = normalize_zone_replays(zone_replays_raw)
+        status["zone_replays_source"] = source
+        if source == "unavailable":
+            status["last_error"] = f"Zone replays load failed: {exc}"
+
+    try:
+        zone_models = load_joblib_from_s3(S3_KEYS["zone_models"])
+        status["zone_models_source"] = "s3"
+    except Exception as exc:
+        zone_models, source = fallback_zone_models()
+        status["zone_models_source"] = source
+        if source == "unavailable":
+            status["last_error"] = f"Zone models load failed: {exc}"
+
+    status["zone_count"] = len(zone_replays_by_name)
+    status["zone_mode_active"] = zone_mode_available()
+
 
 def zscore(value, mean, std):
     return 0.0 if std <= 0 else (value - mean) / std
 
 
 def label_from_score(score: float):
-    if score < -0.45:
+    if score < -0.115:
         return "CRITICAL"
-    if score < -0.25:
+    if score < -0.09:
         return "ALERT"
-    if score < -0.1:
+    if score < -0.05:
         return "WATCH"
     return "NORMAL"
 
@@ -301,16 +425,24 @@ def current_baseline_for(timestamp):
     return baselines_by_month.get(month) or baselines_by_month.get(4) or next(iter(baselines_by_month.values()))
 
 
-def store_reading(row, z_scores, score, label, is_anomaly):
+def current_zone_baseline_for(zone_name, timestamp):
+    zone_baselines = zone_baselines_by_name.get(zone_name)
+    if zone_baselines:
+        month = pd.Timestamp(timestamp).month
+        return zone_baselines.get(month) or next(iter(zone_baselines.values()))
+    return current_baseline_for(timestamp)
+
+def store_reading(row, z_scores, score, label, is_anomaly, zone_name=None):
     with sqlite_conn() as conn:
         conn.execute(
             """
             INSERT INTO readings (
-                timestamp, temp_c, salinity, dissolved_oxygen, station_lat, station_lon,
+                zone, timestamp, temp_c, salinity, dissolved_oxygen, station_lat, station_lon,
                 temp_z, sal_z, oxygen_z, anomaly_score, anomaly_label, is_anomaly
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                zone_name,
                 pd.Timestamp(row["timestamp"]).isoformat(),
                 float(row["temp_c"]),
                 float(row["salinity"]),
@@ -352,16 +484,17 @@ def parse_alert_fields(text: str):
     return urgency, threat
 
 
-def generate_alert_narrative(row, baseline, z_scores):
+def generate_alert_narrative(row, baseline, z_scores, zone_name=None):
+    zone_fragment = f" in the {zone_name.replace('-', ' ').title()} zone" if zone_name else ""
     if not gemini:
         return (
             "Threat: Marine heatwave risk.\n"
             "Urgency: HIGH.\n"
-            "Action: Review this station and consider dispatching kelp monitoring or urchin response teams."
+            f"Action: Review this station{zone_fragment} and consider dispatching kelp monitoring or urchin response teams."
         )
 
     prompt = f"""You are assisting a marine biologist monitoring kelp forest health off the California coast.
-An ocean anomaly was detected at latitude {row['station_lat']}, longitude {row['station_lon']}.
+An ocean anomaly was detected{zone_fragment} at latitude {row['station_lat']}, longitude {row['station_lon']}.
 
 Reading:
 - temp={row['temp_c']}C ({z_scores['temp']:+.1f} sigma)
@@ -382,8 +515,9 @@ Action: what the biologist should investigate and where to dispatch urchin hunte
     return (response.text or "").strip()
 
 
-def store_alert(row, narrative, urgency, threat):
+def store_alert(row, narrative, urgency, threat, zone_name=None):
     payload = {
+        "zone": zone_name,
         "timestamp": pd.Timestamp(row["timestamp"]).isoformat(),
         "station_lat": float(row["station_lat"]),
         "station_lon": float(row["station_lon"]),
@@ -396,10 +530,11 @@ def store_alert(row, narrative, urgency, threat):
         conn.execute(
             """
             INSERT INTO alerts (
-                timestamp, station_lat, station_lon, urgency, threat, narrative, raw_payload
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                zone, timestamp, station_lat, station_lon, urgency, threat, narrative, raw_payload
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                zone_name,
                 payload["timestamp"],
                 payload["station_lat"],
                 payload["station_lon"],
@@ -422,64 +557,112 @@ def store_alert(row, narrative, urgency, threat):
         status["last_error"] = f"Alert S3 write failed: {exc}"
 
 
-def process_row(row):
-    baseline = current_baseline_for(row["timestamp"])
+def compute_state(row, baseline, active_model, zone_name=None):
     z_scores = {
         "temp": zscore(float(row["temp_c"]), baseline["temp_mean"], baseline["temp_std"]),
         "salinity": zscore(float(row["salinity"]), baseline["sal_mean"], baseline["sal_std"]),
         "oxygen": zscore(float(row["dissolved_oxygen"]), baseline["oxygen_mean"], baseline["oxygen_std"]),
     }
-
     features = [[z_scores["temp"], z_scores["salinity"], z_scores["oxygen"]]]
-    score = float(model.decision_function(features)[0])
+    score = float(active_model.decision_function(features)[0])
     label = label_from_score(score)
-    is_anomaly = score < -0.1
+    is_anomaly = score < -0.05
+    return {
+        "zone_key": zone_name,
+        "zone": zone_name.replace("-", " ").title() if zone_name else None,
+        "timestamp": pd.Timestamp(row["timestamp"]).isoformat(),
+        "temp_c": float(row["temp_c"]),
+        "salinity": float(row["salinity"]),
+        "dissolved_oxygen": float(row["dissolved_oxygen"]),
+        "station_lat": float(row["station_lat"]),
+        "station_lon": float(row["station_lon"]),
+        "anomaly_score": score,
+        "anomaly_label": label,
+        "is_anomaly": is_anomaly,
+        "z_scores": z_scores,
+    }
 
-    store_reading(row, z_scores, score, label, is_anomaly)
 
-    with state_lock:
-        latest_live.update(
-            {
-                "timestamp": pd.Timestamp(row["timestamp"]).isoformat(),
-                "temp_c": float(row["temp_c"]),
-                "salinity": float(row["salinity"]),
-                "dissolved_oxygen": float(row["dissolved_oxygen"]),
-                "station_lat": float(row["station_lat"]),
-                "station_lon": float(row["station_lon"]),
-                "anomaly_score": score,
-                "anomaly_label": label,
-                "is_anomaly": is_anomaly,
-                "z_scores": z_scores,
-                "source": status["replay_source"],
-            }
-        )
+def process_row(row, zone_name=None):
+    baseline = current_zone_baseline_for(zone_name, row["timestamp"]) if zone_name else current_baseline_for(row["timestamp"])
+    active_model = zone_models.get(zone_name, model) if zone_name else model
+    state = compute_state(row, baseline, active_model, zone_name)
+    store_reading(row, state["z_scores"], state["anomaly_score"], state["anomaly_label"], state["is_anomaly"], zone_name)
 
-    if is_anomaly:
-        narrative = generate_alert_narrative(row, baseline, z_scores)
+    if state["is_anomaly"]:
+        narrative = generate_alert_narrative(row, baseline, state["z_scores"], zone_name)
         urgency, threat = parse_alert_fields(narrative)
-        with state_lock:
+        state["alert"] = {
+            "active": True,
+            "timestamp": state["timestamp"],
+            "location": {"lat": state["station_lat"], "lon": state["station_lon"]},
+            "narrative": narrative,
+            "urgency": urgency,
+            "threat": threat,
+            "zone": state["zone"],
+            "zone_key": state["zone_key"],
+        }
+        store_alert(row, narrative, urgency, threat, zone_name)
+    return state
+
+
+def update_global_state_from_zone_states(zone_states):
+    if not zone_states:
+        return
+    worst_state = min(zone_states, key=lambda item: item["anomaly_score"])
+    with state_lock:
+        latest_zones.clear()
+        for state in zone_states:
+            latest_zones[state["zone_key"]] = {
+                **state,
+                "source": status["zone_replays_source"],
+            }
+        latest_live.update({**worst_state, "source": status["zone_replays_source"]})
+
+        anomalous_states = [state for state in zone_states if state["is_anomaly"]]
+        if anomalous_states:
+            worst_alert = min(anomalous_states, key=lambda item: item["anomaly_score"])
+            latest_alert.update(worst_alert["alert"])
+        else:
             latest_alert.update(
                 {
-                    "active": True,
-                    "timestamp": pd.Timestamp(row["timestamp"]).isoformat(),
-                    "location": {
-                        "lat": float(row["station_lat"]),
-                        "lon": float(row["station_lon"]),
-                    },
-                    "narrative": narrative,
-                    "urgency": urgency,
-                    "threat": threat,
+                    "active": False,
+                    "timestamp": worst_state["timestamp"],
+                    "location": {"lat": worst_state["station_lat"], "lon": worst_state["station_lon"]},
+                    "narrative": "",
+                    "urgency": "LOW",
+                    "threat": "",
+                    "zone": worst_state["zone"],
+                    "zone_key": worst_state["zone_key"],
                 }
             )
-        store_alert(row, narrative, urgency, threat)
 
 
 def replay_loop():
     status["replay_running"] = True
+    if zone_mode_available():
+        zone_names = sorted(zone_replays_by_name)
+        step_count = min(len(zone_replays_by_name[name]) for name in zone_names)
+        while True:
+            for idx in range(step_count):
+                zone_states = []
+                for zone_name in zone_names:
+                    try:
+                        row = zone_replays_by_name[zone_name].iloc[idx]
+                        zone_states.append(process_row(row, zone_name=zone_name))
+                    except Exception as exc:
+                        status["last_error"] = f"Zone replay processing error ({zone_name}): {exc}"
+                update_global_state_from_zone_states(zone_states)
+                time.sleep(REPLAY_INTERVAL_SECONDS)
+
     while True:
         for _, row in replay_df.iterrows():
             try:
-                process_row(row)
+                state = process_row(row)
+                with state_lock:
+                    latest_live.update({**state, "source": status["replay_source"]})
+                    if state["is_anomaly"]:
+                        latest_alert.update(state["alert"])
             except Exception as exc:
                 status["last_error"] = f"Replay processing error: {exc}"
             time.sleep(REPLAY_INTERVAL_SECONDS)
@@ -496,7 +679,7 @@ def history():
     with sqlite_conn() as conn:
         rows = conn.execute(
             """
-            SELECT timestamp, temp_c, salinity, dissolved_oxygen, station_lat, station_lon,
+            SELECT zone, timestamp, temp_c, salinity, dissolved_oxygen, station_lat, station_lon,
                    temp_z, sal_z, oxygen_z, anomaly_score, anomaly_label, is_anomaly
             FROM readings
             ORDER BY id DESC
@@ -506,16 +689,17 @@ def history():
 
     rows = [
         {
-            "timestamp": row[0],
-            "temp_c": row[1],
-            "salinity": row[2],
-            "dissolved_oxygen": row[3],
-            "station_lat": row[4],
-            "station_lon": row[5],
-            "z_scores": {"temp": row[6], "salinity": row[7], "oxygen": row[8]},
-            "anomaly_score": row[9],
-            "anomaly_label": row[10],
-            "is_anomaly": bool(row[11]),
+            "zone": row[0],
+            "timestamp": row[1],
+            "temp_c": row[2],
+            "salinity": row[3],
+            "dissolved_oxygen": row[4],
+            "station_lat": row[5],
+            "station_lon": row[6],
+            "z_scores": {"temp": row[7], "salinity": row[8], "oxygen": row[9]},
+            "anomaly_score": row[10],
+            "anomaly_label": row[11],
+            "is_anomaly": bool(row[12]),
         }
         for row in rows
     ]
@@ -525,8 +709,15 @@ def history():
 @app.route("/baseline")
 def baseline():
     timestamp = latest_live["timestamp"] or pd.Timestamp.utcnow().isoformat()
-    baseline = current_baseline_for(timestamp)
+    zone_key = latest_live.get("zone_key")
+    baseline = current_zone_baseline_for(zone_key, timestamp) if zone_key else current_baseline_for(timestamp)
     return jsonify(baseline)
+
+
+@app.route("/zones/live")
+def zones_live():
+    with state_lock:
+        return jsonify(dict(latest_zones))
 
 
 @app.route("/alert/latest")
@@ -547,12 +738,30 @@ def health():
             "baselines_source": status["baselines_source"],
             "replay_source": status["replay_source"],
             "model_source": status["model_source"],
+            "zone_baselines_source": status["zone_baselines_source"],
+            "zone_replays_source": status["zone_replays_source"],
+            "zone_models_source": status["zone_models_source"],
             "replay_rows": status["replay_rows"],
             "replay_running": status["replay_running"],
+            "zone_count": status["zone_count"],
+            "zone_mode_active": status["zone_mode_active"],
             "last_error": status["last_error"],
             "db_path": str(DB_PATH),
         }
     )
+
+
+@app.route("/")
+def frontend_index():
+    return send_from_directory(FRONTEND_ROOT, "index.html")
+
+
+@app.route("/<path:filename>")
+def frontend_files(filename):
+    path = FRONTEND_ROOT / filename
+    if path.is_file():
+        return send_from_directory(FRONTEND_ROOT, filename)
+    return ("Not Found", 404)
 
 
 init_db()
